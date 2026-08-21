@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RULES } from './rules';
-import { InputState, consumeMouseDelta } from './input';
+import { consumeMouseDelta, type InputState } from './input';
 
 export type Vitals = { health: number; stamina: number; exhausted: boolean };
 

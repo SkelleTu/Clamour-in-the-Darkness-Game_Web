@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.ts","./src/vite-env.d.ts","./src/components/AddressPrompt.tsx","./src/components/HUD.tsx","./src/components/TouchControls.tsx","./src/game/engine.ts","./src/game/horror.ts","./src/game/input.ts","./src/game/persistence.ts","./src/game/player.ts","./src/game/rules.ts","./src/game/world.ts","./src/lib/supabase.ts"],"version":"5.9.3"}

@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { RULES } from './rules';
-import { InputState, createInputState, bindInput } from './input';
-import { PlayerState, createPlayerState, updatePlayer, getCameraMatrix } from './player';
-import { buildWorld, spawnTestObject, World } from './world';
-import { HorrorEvent, spawnHorrorEvent, updateHorrorEvents } from './horror';
+import { createInputState, bindInput, isTouchDevice } from './input';
+import { createPlayerState, updatePlayer, getCameraMatrix } from './player';
+import { buildWorld, spawnTestObject } from './world';
+import { spawnHorrorEvent, updateHorrorEvents } from './horror';
 import { savePlayerState, broadcastHorrorEvent } from './persistence';
+import type { HorrorEvent } from './horror';
 
 export type GameCallbacks = {
   onVitalsChange: (health: number, stamina: number) => void;
@@ -12,6 +13,8 @@ export type GameCallbacks = {
 };
 
 export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks) {
+  const isTouch = isTouchDevice();
+
   // Session id
   let sessionId = localStorage.getItem('clamour_session') ?? '';
   if (!sessionId) {
@@ -48,18 +51,19 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks) 
   // Horror events
   const horrorEvents: HorrorEvent[] = [];
 
-  // Crosshair pulse helper
-  let interactCooldown = 0;
   let autosaveTimer = 0;
-  let horrorPollTimer = 0;
   let lastPointerLock = false;
 
   // One-frame flags to avoid hold-trigger
   let jumpConsumed = false;
   let spawnConsumed = false;
   let horrorConsumed = false;
+  let interactConsumed = false;
 
-  // Test objects spawned with F
+  // Touch look accumulator
+  let touchLookX = 0;
+  let touchLookY = 0;
+
   const spawnedObjects: THREE.Mesh[] = [];
 
   let animFrameId = 0;
@@ -74,20 +78,69 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks) 
   };
   window.addEventListener('resize', resize);
 
+  // --- Touch input handlers ---
+  const touchMove = { x: 0, y: 0 };
+
+  function setTouchMove(x: number, y: number) {
+    touchMove.x = x;
+    touchMove.y = y;
+    input.forward = y < -0.15;
+    input.backward = y > 0.15;
+    input.left = x < -0.15;
+    input.right = x > 0.15;
+  }
+
+  function addTouchLook(dx: number, dy: number) {
+    touchLookX += dx;
+    touchLookY += dy;
+  }
+
+  function triggerTouchJump() {
+    input.jump = true;
+  }
+
+  function triggerTouchInteract() {
+    input.interact = true;
+  }
+
+  function triggerTouchHorror() {
+    input.triggerHorror = true;
+  }
+
+  function setTouchSprint(active: boolean) {
+    input.sprint = active;
+  }
+
   function tick() {
     animFrameId = requestAnimationFrame(tick);
     const dt = Math.min(clock.getDelta(), 0.1);
 
-    // pointer lock state
-    if (input.pointerLocked !== lastPointerLock) {
+    // pointer lock state (desktop only)
+    if (!isTouch && input.pointerLocked !== lastPointerLock) {
       lastPointerLock = input.pointerLocked;
       callbacks.onPointerLock(input.pointerLocked);
+    }
+    if (isTouch) {
+      // On touch we always report "locked" so HUD shows crosshair + hides "click to play"
+      if (!lastPointerLock) {
+        lastPointerLock = true;
+        callbacks.onPointerLock(true);
+      }
+    }
+
+    // --- Apply touch look to mouse delta ---
+    if (isTouch && (touchLookX !== 0 || touchLookY !== 0)) {
+      input.mouseX += touchLookX;
+      input.mouseY += touchLookY;
+      touchLookX = 0;
+      touchLookY = 0;
     }
 
     // One-shot keys
     if (!input.jump) jumpConsumed = false;
     if (!input.spawnObject) spawnConsumed = false;
     if (!input.triggerHorror) horrorConsumed = false;
+    if (!input.interact) interactConsumed = false;
 
     const jump = input.jump && !jumpConsumed;
     if (jump) jumpConsumed = true;
@@ -104,11 +157,19 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks) 
       broadcastHorrorEvent(sessionId, ev.position.x, ev.position.y, ev.position.z);
     }
 
-    // Temporarily patch input.jump for one-shot
+    if (input.interact && !interactConsumed) {
+      interactConsumed = true;
+      // pickup logic placeholder
+    }
+
     const savedJump = input.jump;
     input.jump = jump;
     updatePlayer(player, input, dt, world.colliders);
+    // On touch, jump is a one-shot tap — clear it immediately after consuming
+    if (isTouch) input.jump = false;
     input.jump = savedJump;
+    if (isTouch) input.interact = false;
+    if (isTouch) input.triggerHorror = false;
 
     // Apply camera
     const mat = getCameraMatrix(player);
@@ -117,7 +178,7 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks) 
     // Horror events
     updateHorrorEvents(horrorEvents, dt, scene);
 
-    // Vitals callback (throttled by 60 fps anyway)
+    // Vitals callback
     callbacks.onVitalsChange(player.vitals.health, player.vitals.stamina);
 
     // Autosave
@@ -135,9 +196,19 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks) 
   return {
     get sessionId() { return sessionId; },
     get player() { return player; },
+    get isTouch() { return isTouch; },
     loadPosition(x: number, y: number, z: number, yaw: number) {
       player.position.set(x, y, z);
       player.yaw = yaw;
+    },
+    // Touch control bridge
+    touchControls: {
+      onMove: setTouchMove,
+      onLook: addTouchLook,
+      onJump: triggerTouchJump,
+      onSprint: setTouchSprint,
+      onInteract: triggerTouchInteract,
+      onHorror: triggerTouchHorror,
     },
     destroy() {
       cancelAnimationFrame(animFrameId);

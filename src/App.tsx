@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { AddressPrompt } from '@/components/AddressPrompt';
 import { HUD } from '@/components/HUD';
+import { TouchControls } from '@/components/TouchControls';
 import { createGame } from '@/game/engine';
-import { loadOrCreatePlayer } from '@/game/persistence';
+import { loadOrCreatePlayer, geocodeAddress } from '@/game/persistence';
+import { isTouchDevice } from '@/game/input';
 import { RULES } from '@/game/rules';
 
 const SESSION_KEY = 'clamour_session';
@@ -20,26 +22,37 @@ function getOrCreateSession() {
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<ReturnType<typeof createGame> | null>(null);
+  const isTouch = useRef(isTouchDevice()).current;
 
-  const [phase, setPhase] = useState<'address' | 'loading' | 'playing'>(
+  const [phase, setPhase] = useState<'address' | 'loading' | 'playing' | 'error'>(
     localStorage.getItem(ADDRESS_KEY) ? 'loading' : 'address',
   );
   const [address, setAddress] = useState(localStorage.getItem(ADDRESS_KEY) ?? '');
   const [health, setHealth] = useState(RULES.vitals.maxHealth);
   const [stamina, setStamina] = useState(RULES.vitals.maxStamina);
   const [locked, setLocked] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const startGame = useCallback(async (addr: string) => {
     if (!canvasRef.current) return;
+
     localStorage.setItem(ADDRESS_KEY, addr);
     setAddress(addr);
-    setPhase('playing');
+    setPhase('loading');
 
     const sessionId = getOrCreateSession();
-    const saved = await loadOrCreatePlayer(
-      sessionId, addr,
-      RULES.world.defaultLatitude, RULES.world.defaultLongitude,
-    );
+
+    // Geocode the address to real lat/lon
+    let lat = RULES.world.defaultLatitude;
+    let lon = RULES.world.defaultLongitude;
+    const geo = await geocodeAddress(addr);
+    if (geo) {
+      lat = geo.lat;
+      lon = geo.lon;
+    }
+    // If geocoding fails, we still spawn at the default world origin but save the address.
+
+    const saved = await loadOrCreatePlayer(sessionId, addr, lat, lon);
 
     if (gameRef.current) {
       gameRef.current.destroy();
@@ -56,6 +69,7 @@ export default function App() {
     }
 
     gameRef.current = game;
+    setPhase('playing');
   }, []);
 
   // Auto-start if address already stored
@@ -63,26 +77,18 @@ export default function App() {
     if (phase === 'loading' && address) {
       startGame(address);
     }
-  }, [phase, address, startGame]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => { gameRef.current?.destroy(); };
   }, []);
 
-  // Canvas fills the viewport
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const obs = new ResizeObserver(() => {
-      // engine handles its own resize via window listener
-    });
-    obs.observe(canvas);
-    return () => obs.disconnect();
-  }, []);
+  const touchControls = gameRef.current?.touchControls;
 
   return (
-    <div className="fixed inset-0 bg-black overflow-hidden">
+    <div className="fixed inset-0 bg-black overflow-hidden select-none">
       <canvas
         ref={canvasRef}
         className="absolute inset-0 w-full h-full block"
@@ -90,11 +96,50 @@ export default function App() {
       />
 
       {phase === 'address' && (
-        <AddressPrompt onConfirm={(addr) => { setPhase('loading'); startGame(addr); }} />
+        <AddressPrompt
+          onConfirm={(addr) => { startGame(addr); }}
+        />
+      )}
+
+      {phase === 'loading' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin mx-auto" />
+            <p className="text-xs font-mono tracking-widest text-white/40 uppercase">
+              Locating your home...
+            </p>
+          </div>
+        </div>
+      )}
+
+      {phase === 'error' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+          <div className="text-center space-y-4 max-w-sm px-6">
+            <p className="text-red-400/80 text-sm font-mono">{errorMsg}</p>
+            <button
+              className="px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white/70 text-sm font-mono hover:bg-white/15"
+              onClick={() => { setPhase('address'); setErrorMsg(''); }}
+            >
+              Try again
+            </button>
+          </div>
+        </div>
       )}
 
       {phase === 'playing' && (
-        <HUD health={health} stamina={stamina} locked={locked} address={address} />
+        <>
+          <HUD health={health} stamina={stamina} locked={locked} address={address} isTouch={isTouch} />
+          {isTouch && touchControls && (
+            <TouchControls
+              onMove={touchControls.onMove}
+              onLook={touchControls.onLook}
+              onSprint={touchControls.onSprint}
+              onJump={touchControls.onJump}
+              onInteract={touchControls.onInteract}
+              onHorror={touchControls.onHorror}
+            />
+          )}
+        </>
       )}
     </div>
   );

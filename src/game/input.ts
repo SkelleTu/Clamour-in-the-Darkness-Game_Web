@@ -6,6 +6,7 @@ export type InputState = {
   spawnObject: boolean; triggerHorror: boolean;
   mouseX: number; mouseY: number;
   pointerLocked: boolean;
+  touchLook: boolean;
 };
 
 export function createInputState(): InputState {
@@ -15,10 +16,21 @@ export function createInputState(): InputState {
     spawnObject: false, triggerHorror: false,
     mouseX: 0, mouseY: 0,
     pointerLocked: false,
+    touchLook: false,
   };
 }
 
+export function isTouchDevice(): boolean {
+  return (
+    'ontouchstart' in window ||
+    navigator.maxTouchPoints > 0 ||
+    window.matchMedia('(pointer: coarse)').matches
+  );
+}
+
 export function bindInput(state: InputState, canvas: HTMLElement) {
+  const isTouch = isTouchDevice();
+
   const keyMap: Record<string, keyof InputState> = {
     KeyW: 'forward', KeyS: 'backward', KeyA: 'left', KeyD: 'right',
     ShiftLeft: 'sprint', ShiftRight: 'sprint',
@@ -28,27 +40,32 @@ export function bindInput(state: InputState, canvas: HTMLElement) {
 
   const onKey = (e: KeyboardEvent, down: boolean) => {
     const key = keyMap[e.code];
-    if (key) (state as Record<string, boolean>)[key as string] = down;
+    if (key) (state as unknown as Record<string, boolean>)[key as string] = down;
     if (e.code === 'Space' && down) e.preventDefault();
   };
 
   document.addEventListener('keydown', (e) => onKey(e, true));
   document.addEventListener('keyup', (e) => onKey(e, false));
 
-  document.addEventListener('mousemove', (e) => {
-    if (state.pointerLocked) {
-      state.mouseX += e.movementX;
-      state.mouseY += e.movementY;
-    }
-  });
+  // --- Desktop: mouse look via Pointer Lock ---
+  if (!isTouch) {
+    document.addEventListener('mousemove', (e) => {
+      if (state.pointerLocked) {
+        state.mouseX += e.movementX;
+        state.mouseY += e.movementY;
+      }
+    });
 
-  canvas.addEventListener('click', () => {
-    canvas.requestPointerLock();
-  });
+    canvas.addEventListener('click', () => {
+      if (!state.pointerLocked) {
+        canvas.requestPointerLock();
+      }
+    });
 
-  document.addEventListener('pointerlockchange', () => {
-    state.pointerLocked = document.pointerLockElement === canvas;
-  });
+    document.addEventListener('pointerlockchange', () => {
+      state.pointerLocked = document.pointerLockElement === canvas;
+    });
+  }
 }
 
 export function consumeMouseDelta(state: InputState): { dx: number; dy: number } {

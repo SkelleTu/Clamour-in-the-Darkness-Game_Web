@@ -6,9 +6,10 @@ type Props = {
   stamina: number;
   locked: boolean;
   address: string;
+  isTouch: boolean;
 };
 
-export function HUD({ health, stamina, locked, address }: Props) {
+export function HUD({ health, stamina, locked, address, isTouch }: Props) {
   const hPct = (health / RULES.vitals.maxHealth) * 100;
   const sPct = (stamina / RULES.vitals.maxStamina) * 100;
 
@@ -19,7 +20,7 @@ export function HUD({ health, stamina, locked, address }: Props) {
     <>
       {/* Crosshair */}
       {locked && (
-        <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-30">
+        <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-10">
           <div className="relative w-5 h-5">
             <span className="absolute top-1/2 left-0 w-full h-px bg-white/70 -translate-y-1/2" />
             <span className="absolute left-1/2 top-0 h-full w-px bg-white/70 -translate-x-1/2" />
@@ -56,8 +57,8 @@ export function HUD({ health, stamina, locked, address }: Props) {
 
       {/* Address badge */}
       {address && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
-          <div className="bg-black/50 border border-white/10 rounded-full px-4 py-1">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-30 pointer-events-none max-w-[90vw]">
+          <div className="bg-black/50 border border-white/10 rounded-full px-4 py-1 truncate">
             <span className="text-xs font-mono text-white/40 tracking-widest uppercase">
               {address}
             </span>
@@ -65,8 +66,8 @@ export function HUD({ health, stamina, locked, address }: Props) {
         </div>
       )}
 
-      {/* Click to play */}
-      {!locked && (
+      {/* Click to play — desktop only */}
+      {!locked && !isTouch && (
         <div className="fixed inset-0 flex items-center justify-center z-30 pointer-events-none">
           <div className="text-center">
             <p className="text-white/30 text-sm font-mono tracking-widest uppercase animate-pulse">
@@ -76,8 +77,8 @@ export function HUD({ health, stamina, locked, address }: Props) {
         </div>
       )}
 
-      {/* Controls hint */}
-      {locked && (
+      {/* Controls hint — desktop only */}
+      {locked && !isTouch && (
         <div className="fixed bottom-24 right-6 z-30 pointer-events-none opacity-30 hover:opacity-60 transition-opacity">
           <div className="bg-black/40 rounded-xl px-3 py-2 border border-white/10 text-[10px] font-mono text-white/60 space-y-0.5">
             <div>WASD — move</div>

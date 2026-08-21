@@ -1,5 +1,5 @@
 export const RULES = {
-  world: { defaultLatitude: -22.3572, defaultLongitude: -47.3841, city: "Araras", country: "BR" },
+  world: { defaultLatitude: -22.3572 as number, defaultLongitude: -47.3841 as number, city: "Araras", country: "BR" },
   movement: {
     walkSpeed: 3.8, sprintSpeed: 6.2, acceleration: 18.0, deceleration: 22.0,
     rotationSpeed: 14.0, gravity: -24.0, jumpHeight: 1.45, slopeLimit: 48.0,
@@ -17,7 +17,7 @@ export const RULES = {
     walkBobAmplitude: 0.018, sprintBobAmplitude: 0.035,
     landingKick: 0.055, stumbleRoll: 5.5, stumblePitch: 4,
   },
-  vitals: { maxHealth: 100, maxStamina: 100, sprintDrainPerSecond: 20, staminaRegenPerSecond: 12, exhaustionThreshold: 1 },
+  vitals: { maxHealth: 100 as number, maxStamina: 100 as number, sprintDrainPerSecond: 20, staminaRegenPerSecond: 12, exhaustionThreshold: 1 },
   interaction: { pickupRange: 2.2 },
   streetView: { passive: true, metadataRadiusMeters: 70, imageWidth: 1024, imageHeight: 640, fov: 96, requestDebounceMs: 1200 },
   horror: { manifestationSeconds: 2.6, distanceMeters: 7, sharedEventPollingMs: 1200 },
