@@ -6,7 +6,7 @@ title Clamour in the Darkness - Local Web Player
 
 echo ==========================================
 echo   CLAMOUR IN THE DARKNESS
- e﻿cho   Local Web Player
+echo   Local Web Player
 echo ==========================================
 echo.
 
