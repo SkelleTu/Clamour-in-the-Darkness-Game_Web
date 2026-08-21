@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { MapPin } from 'lucide-react';
+import { isTouchDevice } from '@/game/input';
 
 type Props = {
   onConfirm: (address: string) => void;
@@ -8,18 +9,23 @@ type Props = {
 export function AddressPrompt({ onConfirm }: Props) {
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const isTouch = useRef(isTouchDevice()).current;
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (e?: React.FormEvent | React.MouseEvent | React.TouchEvent) => {
+    e?.preventDefault();
+    if (submitting) return;
     if (value.trim().length < 4) {
-      setError('Enter a full street address.');
+      setError('Digite um endereço completo.');
       return;
     }
+    setSubmitting(true);
+    setError('');
     onConfirm(value.trim());
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#060608]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#060608] touch-manipulation">
       {/* Vignette */}
       <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-black/80 pointer-events-none" />
 
@@ -44,10 +50,10 @@ export function AddressPrompt({ onConfirm }: Props) {
         <div className="w-24 h-px bg-white/10" />
 
         {/* Form */}
-        <form onSubmit={submit} className="w-full space-y-4">
+        <form onSubmit={handleSubmit} className="w-full space-y-4">
           <div className="space-y-2">
             <label className="text-xs font-mono tracking-widest text-white/40 uppercase block">
-              Your home address
+              Seu endereço
             </label>
             <div className="relative">
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
@@ -55,31 +61,37 @@ export function AddressPrompt({ onConfirm }: Props) {
                 type="text"
                 value={value}
                 onChange={e => { setValue(e.target.value); setError(''); }}
-                placeholder="e.g. Rua XV de Novembro 123, Araras"
+                placeholder="Rua XV de Novembro 123, Araras"
                 className="w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-4 py-3
                            text-sm text-white/80 placeholder-white/20 font-mono
-                           focus:outline-none focus:border-white/25 focus:bg-white/8 transition-all"
+                           focus:outline-none focus:border-white/25 transition-all"
                 autoComplete="street-address"
-                autoFocus
+                autoCapitalize="words"
               />
             </div>
             {error && (
               <p className="text-xs text-red-400/80 font-mono">{error}</p>
             )}
             <p className="text-[11px] text-white/20 font-mono leading-relaxed">
-              This address anchors your starting position in the real world.
-              The game will spawn you here on first entry.
+              Este endereço define sua posição inicial no mundo.
+              O jogo vai te colocar aqui na primeira entrada.
             </p>
           </div>
 
           <button
             type="submit"
-            className="w-full py-3 rounded-lg bg-white/8 border border-white/15 text-white/70
+            disabled={submitting}
+            onClick={handleSubmit}
+            onTouchStart={(e) => { e.preventDefault(); handleSubmit(e); }}
+            className="w-full py-4 rounded-lg bg-white/10 border border-white/20 text-white/80
                        text-sm font-mono tracking-widest uppercase
-                       hover:bg-white/12 hover:text-white/90 hover:border-white/25
-                       active:scale-[0.98] transition-all duration-150"
+                       hover:bg-white/15 hover:text-white hover:border-white/30
+                       active:scale-[0.97] active:bg-white/20
+                       disabled:opacity-50
+                       transition-all duration-150 cursor-pointer
+                       min-h-[52px] flex items-center justify-center"
           >
-            Enter the Night
+            {submitting ? 'Carregando...' : 'Entrar na Noite'}
           </button>
         </form>
       </div>

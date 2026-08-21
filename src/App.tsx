@@ -34,11 +34,21 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState('');
 
   const startGame = useCallback(async (addr: string) => {
-    if (!canvasRef.current) return;
-
     localStorage.setItem(ADDRESS_KEY, addr);
     setAddress(addr);
     setPhase('loading');
+
+    // Wait for canvas to be ready (it may not be mounted yet during address phase)
+    let attempts = 0;
+    while (!canvasRef.current && attempts < 50) {
+      await new Promise(r => setTimeout(r, 50));
+      attempts++;
+    }
+    if (!canvasRef.current) {
+      setErrorMsg('Erro ao inicializar o jogo. Tente novamente.');
+      setPhase('error');
+      return;
+    }
 
     const sessionId = getOrCreateSession();
 
@@ -120,7 +130,7 @@ export default function App() {
               className="px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white/70 text-sm font-mono hover:bg-white/15"
               onClick={() => { setPhase('address'); setErrorMsg(''); }}
             >
-              Try again
+              Tentar novamente
             </button>
           </div>
         </div>
