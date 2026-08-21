@@ -3,74 +3,54 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 
 title Clamour in the Darkness - Local Web Player
-
 echo ==========================================
 echo   CLAMOUR IN THE DARKNESS
 echo   Local Web Player
 echo ==========================================
 echo.
 
-echo Checking Node.js...
-call node --version
-if errorlevel 1 (
-  echo.
-  echo Node.js was not found.
-  echo.
-  pause
-  exit /b 1
-)
-
-echo Checking npm...
-call npm --version
-if errorlevel 1 (
-  echo.
-  echo npm was not found.
-  echo.
-  pause
-  exit /b 1
-)
+echo Node: 
+node --version || goto :node_error
+echo.
+echo Installing/checking dependencies...
+call npm install
+if errorlevel 1 goto :npm_error
 
 echo.
-if not exist "node_modules" (
-  echo Installing dependencies for the first run...
-  call npm install
-  if errorlevel 1 (
-    echo.
-    echo Dependency installation failed.
-    pause
-    exit /b 1
-  )
-)
+echo Starting Vite server...
+start "Clamour Server" cmd /k "cd /d "%~dp0" && npm run dev -- --host 127.0.0.1"
+echo Waiting for the server...
 
-echo.
-echo Starting local web server...
-echo.
-start "Clamour Server" /min cmd /c "call npm run dev -- --host 127.0.0.1 > .clamour-server.log 2>&1"
-
-echo Waiting for server...
 for /L %%N in (1,1,30) do (
   powershell -NoProfile -Command "try { $r=Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:5173' -TimeoutSec 1; if($r.StatusCode -ge 200 -and $r.StatusCode -lt 500){exit 0}; exit 1 } catch { exit 1 }"
-  if not errorlevel 1 goto :server_ready
+  if not errorlevel 1 goto :ready
   timeout /t 1 /nobreak >nul
 )
 
 echo.
-echo The web server did not become ready.
-echo.
-echo ----- SERVER LOG -----
-if exist ".clamour-server.log" type ".clamour-server.log"
-echo ----- END SERVER LOG -----
-echo.
+echo Server did not become ready after 30 seconds.
+echo Check the Clamour Server window for the real error.
 pause
 exit /b 1
 
-:server_ready
-echo.
-echo Server is ready. Opening browser...
+:ready
+echo Server ready. Opening browser...
 start "" "http://127.0.0.1:5173"
 echo.
-echo Clamour is running at http://127.0.0.1:5173
-echo Keep this launcher window open while playing.
+echo Game is running at http://127.0.0.1:5173
+echo Keep this window and the Clamour Server window open while playing.
+cmd /k
+exit /b 0
+
+:node_error
 echo.
+echo Node.js was not found by this launcher.
+echo But if 'node --version' works in CMD, run this file from that same CMD.
 pause
-endlocal
+exit /b 1
+
+:npm_error
+echo.
+echo npm install failed. The window will stay open so you can read the error.
+pause
+exit /b 1
