@@ -47,7 +47,7 @@ app.innerHTML = `
       <h1>Onde você mora?</h1>
       <p>Na primeira entrada, informe o endereço da sua casa. O jogo começa ali. Depois disso, sua última posição fica salva.</p>
       <input id="homeAddress" placeholder="Rua, número, Araras - SP" autocomplete="street-address" />
-      <div class="row"><button id="startBtn">Criar personagem e entrar</button></div>
+      <div class="row"><button id="startBtn" type="button">Criar personagem e entrar</button></div>
       <small>Protótipo web nativo • mundo de Araras • Street View passivo</small>
     </div>
   </div>
@@ -211,16 +211,19 @@ async function createCharacter() {
 }
 
 async function bootstrap() {
-  const restored = await restoreState();
+  // Never let server restore block the character-creation screen.
   initialized = true;
-  modal.classList.toggle('visible', !restored);
   loading.classList.remove('visible');
+  modal.classList.add('visible');
   statusEl.textContent = API_KEY ? 'online' : 'modo local';
   updateHud();
-  if (restored) {
-    await refreshStreetView(true);
-    await refreshWeather();
-  }
+
+  const restored = await restoreState();
+  if (!restored) return;
+
+  modal.classList.remove('visible');
+  await refreshStreetView(true);
+  await refreshWeather();
 }
 
 async function refreshStreetView(force = false) {
