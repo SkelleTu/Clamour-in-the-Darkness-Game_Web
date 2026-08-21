@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableExtensions
 cd /d "%~dp0"
 
 title Clamour in the Darkness - Local Web Player
@@ -10,29 +10,29 @@ echo   Local Web Player
 echo ==========================================
 echo.
 
-node --version >nul 2>nul
+echo Checking Node.js...
+node --version
 if errorlevel 1 (
+  echo.
   echo Node.js was not found in this launch environment.
-  echo Trying common Node.js installation paths...
-  set "NODE_EXE="
-  if exist "%ProgramFiles%\nodejs\node.exe" set "NODE_EXE=%ProgramFiles%\nodejs\node.exe"
-  if not defined NODE_EXE if exist "%ProgramFiles(x86)%\nodejs\node.exe" set "NODE_EXE=%ProgramFiles(x86)%\nodejs\node.exe"
-  if not defined NODE_EXE if exist "%LocalAppData%\Programs\nodejs\node.exe" set "NODE_EXE=%LocalAppData%\Programs\nodejs\node.exe"
-  if not defined NODE_EXE (
-    echo Node.js installation could not be located.
-    echo Please restart Windows after installing Node.js LTS.
-    echo.
-    pause
-    exit /b 1
-  )
-  set "PATH=%ProgramFiles%\nodejs;%ProgramFiles(x86)%\nodejs;%LocalAppData%\Programs\nodejs;%PATH%"
+  echo.
+  echo Try opening CMD and running: node --version
+  echo If that works there, restart Windows or launch this file from CMD.
+  echo.
+  pause
+  exit /b 1
 )
 
-node --version
 npm --version
-
-if not exist "node_modules" (
+if errorlevel 1 (
   echo.
+  echo npm was not found.
+  pause
+  exit /b 1
+)
+
+echo.
+if not exist "node_modules" (
   echo Installing dependencies for the first run...
   call npm install
   if errorlevel 1 (
@@ -45,13 +45,40 @@ if not exist "node_modules" (
 
 echo.
 echo Starting local web server...
+echo Keep this window open while playing.
+echo.
 start "Clamour Server" /min cmd /c "npm run dev -- --host 127.0.0.1 > .clamour-server.log 2>&1"
 
-timeout /t 3 /nobreak >nul
-start "" "http://127.0.0.1:5173"
+set "READY="
+for /L %%N in (1,1,20) do (
+  powershell -NoProfile -Command "try { $r=Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:5173' -TimeoutSec 1; if($r.StatusCode -ge 200 -and $r.StatusCode -lt 500){exit 0}; exit 1 } catch { exit 1 }"
+  if not errorlevel 1 (
+    set "READY=1"
+    goto :server_ready
+  )
+  timeout /t 1 /nobreak >nul
+)
 
+:server_failed
 echo.
-echo Clamour was started in your browser.
-echo Close the Clamour Server window to stop it.
+echo The web server did not become ready.
 echo.
+echo ----- SERVER LOG -----
+if exist ".clamour-server.log" type ".clamour-server.log"
+echo ----- END SERVER LOG -----
+echo.
+echo The launcher will stay open so the error can be read.
+pause
+exit /b 1
+
+:server_ready
+echo.
+echo Server is ready. Opening browser...
+start "" "http://127.0.0.1:5173"
+echo.
+echo Clamour is running at http://127.0.0.1:5173
+ echo Keep this window open while playing.
+echo Press Ctrl+C here to stop the launcher.
+echo.
+cmd /k
 endlocal
