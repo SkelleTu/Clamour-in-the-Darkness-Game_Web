@@ -42,6 +42,32 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
   }
 }
 
+export type AddressSuggestion = {
+  displayName: string;
+  lat: number;
+  lon: number;
+};
+
+export async function searchAddresses(query: string): Promise<AddressSuggestion[]> {
+  if (query.trim().length < 3) return [];
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1`;
+    const resp = await fetch(url, {
+      headers: { 'Accept-Language': 'pt-BR,en' },
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    if (!Array.isArray(data)) return [];
+    return data.map((item: { display_name?: string; lat?: string; lon?: string }) => ({
+      displayName: item.display_name ?? '',
+      lat: parseFloat(item.lat ?? '0'),
+      lon: parseFloat(item.lon ?? '0'),
+    })).filter(s => s.displayName && s.lat && s.lon);
+  } catch {
+    return [];
+  }
+}
+
 export async function loadOrCreatePlayer(
   sessionId: string,
   homeAddress: string,

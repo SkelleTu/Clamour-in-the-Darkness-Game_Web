@@ -33,7 +33,7 @@ export default function App() {
   const [locked, setLocked] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const startGame = useCallback(async (addr: string) => {
+  const startGame = useCallback(async (addr: string, preLat?: number, preLon?: number) => {
     localStorage.setItem(ADDRESS_KEY, addr);
     setAddress(addr);
     setPhase('loading');
@@ -51,17 +51,19 @@ export default function App() {
 
       const sessionId = getOrCreateSession();
 
-      // Geocode the address to real lat/lon
-      let lat = RULES.world.defaultLatitude;
-      let lon = RULES.world.defaultLongitude;
-      try {
-        const geo = await geocodeAddress(addr);
-        if (geo) {
-          lat = geo.lat;
-          lon = geo.lon;
+      // Use pre-geocoded coords from autocomplete, or geocode now
+      let lat = preLat ?? RULES.world.defaultLatitude;
+      let lon = preLon ?? RULES.world.defaultLongitude;
+      if (preLat == null || preLon == null) {
+        try {
+          const geo = await geocodeAddress(addr);
+          if (geo) {
+            lat = geo.lat;
+            lon = geo.lon;
+          }
+        } catch {
+          // fall back to default
         }
-      } catch {
-        // Geocoding is optional — fall back to default coordinates
       }
 
       const saved = await loadOrCreatePlayer(sessionId, addr, lat, lon);
@@ -114,7 +116,7 @@ export default function App() {
 
       {phase === 'address' && (
         <AddressPrompt
-          onConfirm={(addr) => { startGame(addr); }}
+          onConfirm={(addr, lat, lon) => { startGame(addr, lat, lon); }}
         />
       )}
 
