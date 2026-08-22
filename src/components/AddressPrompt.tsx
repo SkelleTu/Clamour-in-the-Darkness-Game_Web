@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 import { MapPin } from 'lucide-react';
-import { isTouchDevice } from '@/game/input';
 
 type Props = {
   onConfirm: (address: string) => void;
@@ -9,23 +8,38 @@ type Props = {
 export function AddressPrompt({ onConfirm }: Props) {
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const isTouch = useRef(isTouchDevice()).current;
+  const submittedRef = useRef(false);
 
-  const handleSubmit = (e?: React.FormEvent | React.MouseEvent | React.TouchEvent) => {
-    e?.preventDefault();
-    if (submitting) return;
+  const handleSubmit = () => {
+    if (submittedRef.current) return;
     if (value.trim().length < 4) {
       setError('Digite um endereço completo.');
       return;
     }
-    setSubmitting(true);
+    submittedRef.current = true;
     setError('');
     onConfirm(value.trim());
   };
 
+  // Pointer events work uniformly for mouse, touch, and pen
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleSubmit();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#060608] touch-manipulation">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#060608]"
+      style={{ touchAction: 'none' }}
+    >
       {/* Vignette */}
       <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-black/80 pointer-events-none" />
 
@@ -49,24 +63,26 @@ export function AddressPrompt({ onConfirm }: Props) {
         {/* Divider */}
         <div className="w-24 h-px bg-white/10" />
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="w-full space-y-4">
+        {/* No form wrapper — avoids mobile submit quirks */}
+        <div className="w-full space-y-4">
           <div className="space-y-2">
             <label className="text-xs font-mono tracking-widest text-white/40 uppercase block">
               Seu endereço
             </label>
             <div className="relative">
-              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25 pointer-events-none" />
               <input
                 type="text"
                 value={value}
                 onChange={e => { setValue(e.target.value); setError(''); }}
+                onKeyDown={handleKeyDown}
                 placeholder="Rua XV de Novembro 123, Araras"
                 className="w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-4 py-3
                            text-sm text-white/80 placeholder-white/20 font-mono
                            focus:outline-none focus:border-white/25 transition-all"
                 autoComplete="street-address"
                 autoCapitalize="words"
+                style={{ fontSize: '16px' }}
               />
             </div>
             {error && (
@@ -79,21 +95,23 @@ export function AddressPrompt({ onConfirm }: Props) {
           </div>
 
           <button
-            type="submit"
-            disabled={submitting}
-            onClick={handleSubmit}
-            onTouchStart={(e) => { e.preventDefault(); handleSubmit(e); }}
+            type="button"
+            onPointerDown={handlePointerDown}
             className="w-full py-4 rounded-lg bg-white/10 border border-white/20 text-white/80
                        text-sm font-mono tracking-widest uppercase
                        hover:bg-white/15 hover:text-white hover:border-white/30
                        active:scale-[0.97] active:bg-white/20
-                       disabled:opacity-50
-                       transition-all duration-150 cursor-pointer
-                       min-h-[52px] flex items-center justify-center"
+                       transition-all duration-150
+                       min-h-[52px] flex items-center justify-center
+                       select-none"
+            style={{
+              touchAction: 'none',
+              WebkitTapHighlightColor: 'transparent',
+            }}
           >
-            {submitting ? 'Carregando...' : 'Entrar na Noite'}
+            Entrar na Noite
           </button>
-        </form>
+        </div>
       </div>
     </div>
   );

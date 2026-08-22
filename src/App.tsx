@@ -38,48 +38,55 @@ export default function App() {
     setAddress(addr);
     setPhase('loading');
 
-    // Wait for canvas to be ready (it may not be mounted yet during address phase)
-    let attempts = 0;
-    while (!canvasRef.current && attempts < 50) {
-      await new Promise(r => setTimeout(r, 50));
-      attempts++;
-    }
-    if (!canvasRef.current) {
-      setErrorMsg('Erro ao inicializar o jogo. Tente novamente.');
+    try {
+      // Wait for canvas to be ready
+      let attempts = 0;
+      while (!canvasRef.current && attempts < 50) {
+        await new Promise(r => setTimeout(r, 50));
+        attempts++;
+      }
+      if (!canvasRef.current) {
+        throw new Error('Canvas não encontrado');
+      }
+
+      const sessionId = getOrCreateSession();
+
+      // Geocode the address to real lat/lon
+      let lat = RULES.world.defaultLatitude;
+      let lon = RULES.world.defaultLongitude;
+      try {
+        const geo = await geocodeAddress(addr);
+        if (geo) {
+          lat = geo.lat;
+          lon = geo.lon;
+        }
+      } catch {
+        // Geocoding is optional — fall back to default coordinates
+      }
+
+      const saved = await loadOrCreatePlayer(sessionId, addr, lat, lon);
+
+      if (gameRef.current) {
+        gameRef.current.destroy();
+        gameRef.current = null;
+      }
+
+      const game = createGame(canvasRef.current!, {
+        onVitalsChange: (h, s) => { setHealth(h); setStamina(s); },
+        onPointerLock: setLocked,
+      });
+
+      if (saved && RULES.persistence.restoreLastPosition) {
+        game.loadPosition(saved.pos_x, saved.pos_y, saved.pos_z, saved.yaw);
+      }
+
+      gameRef.current = game;
+      setPhase('playing');
+    } catch (err) {
+      console.error('startGame error:', err);
+      setErrorMsg('Erro ao inicializar o jogo. Verifique sua conexão e tente novamente.');
       setPhase('error');
-      return;
     }
-
-    const sessionId = getOrCreateSession();
-
-    // Geocode the address to real lat/lon
-    let lat = RULES.world.defaultLatitude;
-    let lon = RULES.world.defaultLongitude;
-    const geo = await geocodeAddress(addr);
-    if (geo) {
-      lat = geo.lat;
-      lon = geo.lon;
-    }
-    // If geocoding fails, we still spawn at the default world origin but save the address.
-
-    const saved = await loadOrCreatePlayer(sessionId, addr, lat, lon);
-
-    if (gameRef.current) {
-      gameRef.current.destroy();
-      gameRef.current = null;
-    }
-
-    const game = createGame(canvasRef.current!, {
-      onVitalsChange: (h, s) => { setHealth(h); setStamina(s); },
-      onPointerLock: setLocked,
-    });
-
-    if (saved && RULES.persistence.restoreLastPosition) {
-      game.loadPosition(saved.pos_x, saved.pos_y, saved.pos_z, saved.yaw);
-    }
-
-    gameRef.current = game;
-    setPhase('playing');
   }, []);
 
   // Auto-start if address already stored
@@ -116,7 +123,7 @@ export default function App() {
           <div className="text-center space-y-3">
             <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin mx-auto" />
             <p className="text-xs font-mono tracking-widest text-white/40 uppercase">
-              Locating your home...
+              Localizando sua casa...
             </p>
           </div>
         </div>
@@ -127,8 +134,9 @@ export default function App() {
           <div className="text-center space-y-4 max-w-sm px-6">
             <p className="text-red-400/80 text-sm font-mono">{errorMsg}</p>
             <button
-              className="px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white/70 text-sm font-mono hover:bg-white/15"
-              onClick={() => { setPhase('address'); setErrorMsg(''); }}
+              className="px-4 py-2 rounded-lg bg-white/10 border border-white/20 text-white/70 text-sm font-mono hover:bg-white/15 min-h-[44px]"
+              onPointerDown={(e) => { e.preventDefault(); setPhase('address'); setErrorMsg(''); }}
+              style={{ touchAction: 'none', WebkitTapHighlightColor: 'transparent' }}
             >
               Tentar novamente
             </button>
