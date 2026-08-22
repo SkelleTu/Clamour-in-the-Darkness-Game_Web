@@ -13,11 +13,22 @@ type Weather = {
   cloudCoverPct?: number | null;
 };
 
-type PositionState = { lat: number; lng: number; x: number; z: number; heading: number };
+type PositionState = {
+  lat: number;
+  lng: number;
+  x: number;
+  z: number;
+  heading: number;
+  pano?: string;
+};
 
 const SERVER = import.meta.env.VITE_UNIVERSAL_SERVER_URL || 'https://universal-server--charlesespurgeo.replit.app';
 const API_KEY = import.meta.env.VITE_UNIVERSAL_SERVER_API_KEY || localStorage.getItem('clamour_api_key') || '';
 const ARARAS = { lat: -22.3572, lng: -47.3841 };
+const STREETVIEW_IMAGE_INTERVAL_MS = 700;
+const STREETVIEW_POSITION_STEP_METERS = 5;
+const STREETVIEW_HEADING_STEP_DEGREES = 10;
+const STREETVIEW_PITCH_STEP_DEGREES = 8;
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
@@ -26,7 +37,8 @@ app.innerHTML = `
       <div><strong>CLAMOUR</strong><span id="status">conectando...</span></div>
       <div id="clock">--:--:--</div>
     </div>
-    <div id="streetview"></div>
+    <div id="streetview" aria-label="Street View do mundo"></div>
+    <div id="streetviewAttribution">Street View</div>
     <div id="crosshair">+</div>
     <div class="vitals">
       <div class="meter"><span>VIDA</span><i id="healthBar"></i></div>
@@ -90,6 +102,7 @@ ground.position.y = -0.01;
 scene.add(ground);
 
 const streetViewEl = document.querySelector<HTMLDivElement>('#streetview')!;
+const streetAttributionEl = document.querySelector<HTMLDivElement>('#streetviewAttribution')!;
 const statusEl = document.querySelector<HTMLSpanElement>('#status')!;
 const weatherEl = document.querySelector<HTMLDivElement>('#weather')!;
 const clockEl = document.querySelector<HTMLDivElement>('#clock')!;
@@ -114,7 +127,16 @@ let grounded = true;
 let bob = 0;
 let weather: Weather | null = null;
 let currentPosition: PositionState = { ...ARARAS, x: 0, z: 0, heading: 0 };
+let originLat = ARARAS.lat;
+let originLng = ARARAS.lng;
+let streetPano: string | null = null;
 let lastStreetRequest = 0;
+let lastStreetX = Number.NaN;
+let lastStreetZ = Number.NaN;
+let lastStreetHeading = Number.NaN;
+let lastStreetPitch = Number.NaN;
+let streetRequestInFlight = false;
+let streetRequestSerial = 0;
 let streetObjectUrl: string | null = null;
 const keys = new Set<string>();
 const inventory: string[] = [];
@@ -141,6 +163,27 @@ function updateHud() {
   inventoryEl.textContent = inventory.length ? `inventário: ${inventory.join(', ')}` : 'inventário: vazio';
 }
 
+function normalizeHeading(value: number): number {
+  return ((value % 360) + 360) % 360;
+}
+
+function distanceMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const lat1 = a.lat * Math.PI / 180;
+  const lat2 = b.lat * Math.PI / 180;
+  const dLat = (b.lat - a.lat) * 111_320;
+  const dLng = (b.lng - a.lng) * 111_320 * Math.cos((lat1 + lat2) / 2);
+  return Math.hypot(dLat, dLng);
+}
+
+function syncGeoFromWorld() {
+  const metersPerDegreeLng = 111_320 * Math.max(0.2, Math.cos(originLat * Math.PI / 180));
+  currentPosition.lat = originLat - (player.position.z / 111_320);
+  currentPosition.lng = originLng + (player.position.x / metersPerDegreeLng);
+  currentPosition.x = player.position.x;
+  currentPosition.z = player.position.z;
+  currentPosition.heading = normalizeHeading(heading);
+}
+
 async function geocode(address: string) {
   const res = await api(`/api/game/google/geocode?address=${encodeURIComponent(address)}`);
   if (!res.ok) throw new Error('Não foi possível localizar o endereço.');
@@ -159,8 +202,12 @@ async function restoreState() {
     const data = await res.json() as { state?: PositionState & { homeAddress?: string } };
     if (!data.state) return false;
     currentPosition = { ...currentPosition, ...data.state };
+    originLat = data.state.lat ?? ARARAS.lat;
+    originLng = data.state.lng ?? ARARAS.lng;
     player.position.set(data.state.x ?? 0, 0, data.state.z ?? 0);
-    heading = data.state.heading ?? 0;
+    heading = normalizeHeading(data.state.heading ?? 0);
+    pitch = -2;
+    streetPano = data.state.pano ?? null;
     return true;
   } catch {
     return false;
@@ -170,9 +217,8 @@ async function restoreState() {
 async function saveState() {
   const id = localStorage.getItem('clamour_player_id');
   if (!id) return;
-  currentPosition.x = player.position.x;
-  currentPosition.z = player.position.z;
-  currentPosition.heading = heading;
+  syncGeoFromWorld();
+  currentPosition.pano = streetPano ?? undefined;
   try {
     await api(`/api/game/player-state/${encodeURIComponent(id)}`, {
       method: 'PUT',
@@ -192,6 +238,9 @@ async function createCharacter() {
     const id = localStorage.getItem('clamour_player_id') || crypto.randomUUID();
     localStorage.setItem('clamour_player_id', id);
     localStorage.setItem('clamour_home_address', geo.formatted ?? address);
+    originLat = geo.lat;
+    originLng = geo.lng;
+    streetPano = null;
     currentPosition = { lat: geo.lat, lng: geo.lng, x: 0, z: 0, heading: 0 };
     await api(`/api/game/player-state/${encodeURIComponent(id)}`, {
       method: 'PUT',
@@ -211,7 +260,6 @@ async function createCharacter() {
 }
 
 async function bootstrap() {
-  // Never let server restore block the character-creation screen.
   initialized = true;
   loading.classList.remove('visible');
   modal.classList.add('visible');
@@ -226,25 +274,115 @@ async function bootstrap() {
   await refreshWeather();
 }
 
+function setStreetViewError(message: string) {
+  streetViewEl.classList.remove('ready');
+  streetViewEl.style.backgroundImage = '';
+  streetAttributionEl.textContent = 'Street View indisponível nesta área';
+  streetAttributionEl.style.display = 'block';
+  statusEl.textContent = 'Street View indisponível';
+  showPrompt(message);
+}
+
 async function refreshStreetView(force = false) {
-  if (!initialized) return;
+  if (!initialized || streetRequestInFlight) return;
   const now = performance.now();
-  if (!force && now - lastStreetRequest < 1200) return;
+  syncGeoFromWorld();
+
+  const moved = !Number.isFinite(lastStreetX)
+    || Math.hypot(player.position.x - lastStreetX, player.position.z - lastStreetZ) >= STREETVIEW_POSITION_STEP_METERS;
+  const turned = !Number.isFinite(lastStreetHeading)
+    || Math.abs(normalizeHeading(heading - lastStreetHeading + 180) - 180) >= STREETVIEW_HEADING_STEP_DEGREES;
+  const pitched = !Number.isFinite(lastStreetPitch)
+    || Math.abs(pitch - lastStreetPitch) >= STREETVIEW_PITCH_STEP_DEGREES;
+
+  if (!force && !moved && !turned && !pitched) return;
+  if (!force && now - lastStreetRequest < STREETVIEW_IMAGE_INTERVAL_MS) return;
+
+  streetRequestInFlight = true;
   lastStreetRequest = now;
+  const requestSerial = ++streetRequestSerial;
+  const requestedHeading = normalizeHeading(heading);
+  const requestedPitch = THREE.MathUtils.clamp(pitch, -78, 82);
+  const requestedLat = currentPosition.lat;
+  const requestedLng = currentPosition.lng;
+
   try {
-    const metadataRes = await api(`/api/game/streetview/metadata?lat=${currentPosition.lat}&lng=${currentPosition.lng}&radius=70`);
-    if (!metadataRes.ok) return;
-    const meta = await metadataRes.json() as { data?: { pano?: string } };
-    if (!meta.data?.pano) return;
-    const imageRes = await api(`/api/game/streetview/image?lat=${currentPosition.lat}&lng=${currentPosition.lng}&heading=${heading}&pitch=${pitch}&fov=96&width=1024&height=640&radius=70`);
-    if (!imageRes.ok) return;
+    let pano = streetPano;
+    let copyright = '';
+
+    const metadataRes = await api(
+      `/api/game/streetview/metadata?lat=${requestedLat}&lng=${requestedLng}&radius=70`
+    );
+    if (!metadataRes.ok) {
+      if (metadataRes.status === 404) setStreetViewError('Não existe Street View disponível suficientemente perto daqui.');
+      else statusEl.textContent = 'Street View com erro';
+      return;
+    }
+
+    const meta = await metadataRes.json() as {
+      data?: { pano?: string; copyright?: string; location?: { lat?: number; lng?: number } };
+    };
+    pano = meta.data?.pano ?? null;
+    if (!pano) {
+      setStreetViewError('Não foi encontrado um panorama para esta posição.');
+      return;
+    }
+    streetPano = pano;
+    copyright = meta.data?.copyright ?? '';
+
+    const imageParams = new URLSearchParams({
+      heading: requestedHeading.toFixed(2),
+      pitch: requestedPitch.toFixed(2),
+      fov: '96',
+      width: '640',
+      height: '480',
+      radius: '70',
+      lat: requestedLat.toFixed(6),
+      lng: requestedLng.toFixed(6),
+      pano,
+    });
+
+    const imageRes = await api(`/api/game/streetview/image?${imageParams.toString()}`);
+    if (!imageRes.ok) {
+      statusEl.textContent = 'Street View com erro';
+      return;
+    }
+
     const blob = await imageRes.blob();
     const url = URL.createObjectURL(blob);
+
+    if (requestSerial !== streetRequestSerial) {
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    const image = new Image();
+    image.decoding = 'async';
+    image.src = url;
+    await image.decode();
+
+    if (requestSerial !== streetRequestSerial) {
+      URL.revokeObjectURL(url);
+      return;
+    }
+
     if (streetObjectUrl) URL.revokeObjectURL(streetObjectUrl);
     streetObjectUrl = url;
     streetViewEl.style.backgroundImage = `url(${url})`;
     streetViewEl.classList.add('ready');
-  } catch { /* keep previous frame */ }
+    streetAttributionEl.textContent = copyright ? `${copyright} • Google` : '© Google';
+    streetAttributionEl.style.display = 'block';
+    statusEl.textContent = 'Street View online';
+    lastStreetX = player.position.x;
+    lastStreetZ = player.position.z;
+    lastStreetHeading = requestedHeading;
+    lastStreetPitch = requestedPitch;
+    showPrompt('');
+  } catch {
+    statusEl.textContent = 'Street View offline';
+  } finally {
+    streetRequestInFlight = false;
+  }
 }
 
 async function refreshWeather() {
@@ -330,6 +468,7 @@ function updateMovement(dt: number) {
   player.position.z += velocity.z * dt;
   player.position.y += jumpVelocity * dt;
   if (player.position.y <= 0) { player.position.y = 0; jumpVelocity = 0; grounded = true; }
+  syncGeoFromWorld();
   const moveSpeed = Math.hypot(velocity.x, velocity.z);
   if (moveSpeed > 0.2 && grounded) bob += dt * (sprinting ? 10.5 : 7);
   const bobY = moveSpeed > 0.2 && grounded ? Math.abs(Math.cos(bob)) * (sprinting ? 0.035 : 0.018) : 0;
@@ -342,10 +481,9 @@ function updateMovement(dt: number) {
 function onPointerMove(e: PointerEvent) {
   if (!initialized || modal.classList.contains('visible')) return;
   if (document.pointerLockElement === renderer.domElement || e.buttons === 1) {
-    heading -= e.movementX * 0.075;
+    heading = normalizeHeading(heading - e.movementX * 0.075);
     pitch = THREE.MathUtils.clamp(pitch + e.movementY * 0.075, -78, 82);
     currentPosition.heading = heading;
-    void refreshStreetView();
   }
 }
 
@@ -360,10 +498,14 @@ window.addEventListener('keyup', e => keys.delete(e.code));
 window.addEventListener('pointermove', onPointerMove);
 renderer.domElement.addEventListener('click', () => renderer.domElement.requestPointerLock?.());
 document.querySelector('#startBtn')?.addEventListener('click', () => void createCharacter());
-document.querySelector('#jumpBtn')?.addEventListener('click', () => keys.add('Space'));
+document.querySelector('#jumpBtn')?.addEventListener('click', () => {
+  keys.add('Space');
+  setTimeout(() => keys.delete('Space'), 80);
+});
 document.querySelector('#interactBtn')?.addEventListener('click', interact);
 setInterval(() => void saveState(), 8000);
 setInterval(() => void refreshWeather(), 60000);
+setInterval(() => void refreshStreetView(), STREETVIEW_IMAGE_INTERVAL_MS);
 
 window.addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
