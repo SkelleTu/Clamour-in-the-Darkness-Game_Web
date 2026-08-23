@@ -2,7 +2,7 @@ import {
   geocodeAddress as serverGeocodeAddress,
   loadPlayerState,
   savePlayerState as serverSavePlayerState,
-  getStreetViewMetadata,
+  UNIVERSAL_SERVER_URL,
   type PlayerState,
 } from '@/lib/universalServer';
 
@@ -44,7 +44,8 @@ export async function searchAddresses(query: string): Promise<AddressSuggestion[
   if (query.trim().length < 3) return [];
   try {
     const result = await fetch(
-      `/api/game/google/geocode?address=${encodeURIComponent(query)}`,
+      `${UNIVERSAL_SERVER_URL}/api/game/google/geocode?address=${encodeURIComponent(query)}`,
+      { headers: { Accept: 'application/json' } },
     );
     if (!result.ok) return [];
     const payload = await result.json();
@@ -62,20 +63,6 @@ export async function searchAddresses(query: string): Promise<AddressSuggestion[
   }
 }
 
-function toSavedState(player: PlayerState, address: string, lat: number, lon: number): SavedPlayerState {
-  return {
-    id: player.playerId,
-    home_address: address,
-    home_lat: lat,
-    home_lon: lon,
-    pos_x: player.posX,
-    pos_y: player.posY,
-    pos_z: player.posZ,
-    yaw: player.yaw,
-    updated_at: new Date().toISOString(),
-  };
-}
-
 export async function loadOrCreatePlayer(
   sessionId: string,
   homeAddress: string,
@@ -83,21 +70,24 @@ export async function loadOrCreatePlayer(
   lon: number,
 ): Promise<SavedPlayerState> {
   const saved = await loadPlayerState(sessionId);
-  if (saved) {
+  const sameHome = Boolean(saved)
+    && Math.abs(Number(saved!.homeLat) - lat) < 0.0005
+    && Math.abs(Number(saved!.homeLon) - lon) < 0.0005;
+
+  if (saved && sameHome) {
     return {
       id: sessionId,
       home_address: String(saved.homeAddress ?? homeAddress),
       home_lat: Number(saved.homeLat ?? lat),
       home_lon: Number(saved.homeLon ?? lon),
       pos_x: Number(saved.posX ?? 0),
-      pos_y: Number(saved.posY ?? 0),
+      pos_y: Number(saved.posY ?? 0.9),
       pos_z: Number(saved.posZ ?? 0),
       yaw: Number(saved.yaw ?? 0),
       updated_at: new Date().toISOString(),
     };
   }
 
-  const metadata = await getStreetViewMetadata(lat, lon);
   const spawn: SavedPlayerState = {
     id: sessionId,
     home_address: homeAddress,
@@ -121,7 +111,6 @@ export async function loadOrCreatePlayer(
     yaw: spawn.yaw,
   });
 
-  void metadata;
   return spawn;
 }
 
@@ -130,15 +119,15 @@ export async function savePlayerState(
   pos: { x: number; y: number; z: number },
   yaw: number,
 ) {
+  const existing = await loadPlayerState(id);
   await serverSavePlayerState(id, {
     playerId: id,
+    homeAddress: existing?.homeAddress,
+    homeLat: existing?.homeLat,
+    homeLon: existing?.homeLon,
     posX: pos.x,
     posY: pos.y,
     posZ: pos.z,
     yaw,
   });
-}
-
-export async function getStreetViewForAddress(lat: number, lon: number) {
-  return getStreetViewMetadata(lat, lon);
 }
