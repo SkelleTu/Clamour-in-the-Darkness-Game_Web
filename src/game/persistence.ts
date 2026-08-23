@@ -1,16 +1,19 @@
-import { supabase } from '@/lib/supabase';
-import { RULES } from './rules';
+import {
+  geocodeAddress as serverGeocodeAddress,
+  loadPlayerState,
+  savePlayerState as serverSavePlayerState,
+  getStreetViewMetadata,
+  type PlayerState,
+} from '@/lib/universalServer';
 
 export async function broadcastHorrorEvent(
-  playerId: string,
-  x: number,
-  y: number,
-  z: number,
+  _playerId: string,
+  _x: number,
+  _y: number,
+  _z: number,
 ) {
-  await supabase.from('clamour_horror_events').insert({
-    player_id: playerId,
-    pos_x: x, pos_y: y, pos_z: z,
-  });
+  // Event transport will be wired through the multiplayer API. The old
+  // Supabase write is intentionally removed so the game has one backend.
 }
 
 export type SavedPlayerState = {
@@ -28,18 +31,7 @@ export type SavedPlayerState = {
 export type GeocodeResult = { lat: number; lon: number } | null;
 
 export async function geocodeAddress(address: string): Promise<GeocodeResult> {
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
-    const resp = await fetch(url, {
-      headers: { 'Accept-Language': 'pt-BR,en' },
-    });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    if (!Array.isArray(data) || data.length === 0) return null;
-    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-  } catch {
-    return null;
-  }
+  return serverGeocodeAddress(address);
 }
 
 export type AddressSuggestion = {
@@ -51,21 +43,37 @@ export type AddressSuggestion = {
 export async function searchAddresses(query: string): Promise<AddressSuggestion[]> {
   if (query.trim().length < 3) return [];
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1`;
-    const resp = await fetch(url, {
-      headers: { 'Accept-Language': 'pt-BR,en' },
-    });
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    if (!Array.isArray(data)) return [];
-    return data.map((item: { display_name?: string; lat?: string; lon?: string }) => ({
-      displayName: item.display_name ?? '',
-      lat: parseFloat(item.lat ?? '0'),
-      lon: parseFloat(item.lon ?? '0'),
-    })).filter(s => s.displayName && s.lat && s.lon);
+    const result = await fetch(
+      `/api/game/google/geocode?address=${encodeURIComponent(query)}`,
+    );
+    if (!result.ok) return [];
+    const payload = await result.json();
+    const rows = Array.isArray(payload?.results) ? payload.results : [];
+    return rows.slice(0, 5).map((item: {
+      formatted_address?: string;
+      geometry?: { location?: { lat?: number; lng?: number } };
+    }) => ({
+      displayName: item.formatted_address ?? '',
+      lat: Number(item.geometry?.location?.lat ?? NaN),
+      lon: Number(item.geometry?.location?.lng ?? NaN),
+    })).filter((s: AddressSuggestion) => s.displayName && Number.isFinite(s.lat) && Number.isFinite(s.lon));
   } catch {
     return [];
   }
+}
+
+function toSavedState(player: PlayerState, address: string, lat: number, lon: number): SavedPlayerState {
+  return {
+    id: player.playerId,
+    home_address: address,
+    home_lat: lat,
+    home_lon: lon,
+    pos_x: player.posX,
+    pos_y: player.posY,
+    pos_z: player.posZ,
+    yaw: player.yaw,
+    updated_at: new Date().toISOString(),
+  };
 }
 
 export async function loadOrCreatePlayer(
@@ -74,27 +82,46 @@ export async function loadOrCreatePlayer(
   lat: number,
   lon: number,
 ): Promise<SavedPlayerState> {
-  const { data } = await supabase
-    .from('clamour_players')
-    .select('*')
-    .eq('id', sessionId)
-    .maybeSingle();
+  const saved = await loadPlayerState(sessionId);
+  if (saved) {
+    return {
+      id: sessionId,
+      home_address: String(saved.homeAddress ?? homeAddress),
+      home_lat: Number(saved.homeLat ?? lat),
+      home_lon: Number(saved.homeLon ?? lon),
+      pos_x: Number(saved.posX ?? 0),
+      pos_y: Number(saved.posY ?? 0),
+      pos_z: Number(saved.posZ ?? 0),
+      yaw: Number(saved.yaw ?? 0),
+      updated_at: new Date().toISOString(),
+    };
+  }
 
-  if (data) return data as SavedPlayerState;
-
+  const metadata = await getStreetViewMetadata(lat, lon);
   const spawn: SavedPlayerState = {
     id: sessionId,
     home_address: homeAddress,
     home_lat: lat,
     home_lon: lon,
     pos_x: 0,
-    pos_y: RULES.movement.controllerHeight / 2,
+    pos_y: 0.9,
     pos_z: 0,
     yaw: 0,
     updated_at: new Date().toISOString(),
   };
 
-  await supabase.from('clamour_players').upsert(spawn);
+  await serverSavePlayerState(sessionId, {
+    playerId: sessionId,
+    homeAddress,
+    homeLat: lat,
+    homeLon: lon,
+    posX: spawn.pos_x,
+    posY: spawn.pos_y,
+    posZ: spawn.pos_z,
+    yaw: spawn.yaw,
+  });
+
+  void metadata;
   return spawn;
 }
 
@@ -103,8 +130,15 @@ export async function savePlayerState(
   pos: { x: number; y: number; z: number },
   yaw: number,
 ) {
-  await supabase.from('clamour_players').update({
-    pos_x: pos.x, pos_y: pos.y, pos_z: pos.z, yaw,
-    updated_at: new Date().toISOString(),
-  }).eq('id', id);
+  await serverSavePlayerState(id, {
+    playerId: id,
+    posX: pos.x,
+    posY: pos.y,
+    posZ: pos.z,
+    yaw,
+  });
+}
+
+export async function getStreetViewForAddress(lat: number, lon: number) {
+  return getStreetViewMetadata(lat, lon);
 }
