@@ -20,15 +20,9 @@ export async function createStreetViewEnvironment(
   const loader = new THREE.TextureLoader();
   loader.setCrossOrigin('anonymous');
 
-  const faces = [
-    90,   // +X
-    270,  // -X
-    0,    // +Z
-    180,  // -Z
-  ];
-
+  const headings = [90, 270, 0, 180];
   const textures = await Promise.all(
-    faces.map((heading) => textureFromUrl(loader, streetViewImageUrl({
+    headings.map((heading) => textureFromUrl(loader, streetViewImageUrl({
       pano: metadata.pano,
       lat: metadata.location.lat,
       lon: metadata.location.lng,
@@ -40,12 +34,11 @@ export async function createStreetViewEnvironment(
     }))),
   );
 
-  const fallback = new THREE.MeshBasicMaterial({ color: 0x050507, side: THREE.BackSide });
   const materials = [
     new THREE.MeshBasicMaterial({ map: textures[0], side: THREE.BackSide }),
     new THREE.MeshBasicMaterial({ map: textures[1], side: THREE.BackSide }),
-    fallback,
-    fallback,
+    new THREE.MeshBasicMaterial({ color: 0x10131a, side: THREE.BackSide }),
+    new THREE.MeshBasicMaterial({ color: 0x050507, side: THREE.BackSide }),
     new THREE.MeshBasicMaterial({ map: textures[2], side: THREE.BackSide }),
     new THREE.MeshBasicMaterial({ map: textures[3], side: THREE.BackSide }),
   ];
@@ -58,7 +51,7 @@ export async function createStreetViewEnvironment(
   const dispose = () => {
     geometry.dispose();
     for (const material of materials) {
-      if (material !== fallback) material.map?.dispose();
+      material.map?.dispose();
       material.dispose();
     }
     scene.remove(mesh);
