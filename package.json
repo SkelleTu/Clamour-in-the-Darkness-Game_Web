@@ -1,7 +1,7 @@
 {
   "name": "clamour-in-the-darkness-web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -14,14 +14,12 @@
     "lucide-react": "^0.446.0",
     "playcanvas": "^2.21.4",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "three": "^0.179.1"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
-    "@types/three": "^0.179.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.18",
     "postcss": "^8.4.35",
