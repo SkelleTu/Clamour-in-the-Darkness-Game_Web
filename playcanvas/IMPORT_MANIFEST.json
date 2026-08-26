@@ -1,0 +1,60 @@
+{
+  "format": "PlayCanvas-Web-Import",
+  "version": 1,
+  "runtime": {
+    "engine": "PlayCanvas Engine 2.x",
+    "graphics": ["WebGL2", "WebGPU"],
+    "unitScaleMeters": 1,
+    "sourceEngine": "Unity 6"
+  },
+  "assetPolicy": {
+    "preferredModelFormat": "glb",
+    "preferredTextureFormats": ["webp", "avif", "png", "jpg"],
+    "preserveNodeNames": true,
+    "preserveMaterialNames": true,
+    "preserveAnimationNames": true,
+    "doNotEmbedGameplayScripts": true,
+    "doNotEmbedUnityPhysics": true,
+    "doNotEmbedUnityNavMesh": true,
+    "doNotTreatUnityPrefabsAsRuntimeLogic": true
+  },
+  "naming": {
+    "building": "BLDG_*",
+    "road": "ROAD_*",
+    "prop": "PROP_*",
+    "door": "DOOR_*",
+    "vehicle": "VEH_*",
+    "character": "CHAR_*",
+    "npcSpawn": "SPAWN_NPC_*",
+    "playerSpawn": "SPAWN_PLAYER",
+    "trigger": "TRIGGER_*",
+    "interaction": "INTERACT_*"
+  },
+  "world": {
+    "strategy": "zone-based",
+    "rule": "Never make the complete city one monolithic runtime asset.",
+    "recommendedUnits": [
+      "terrain",
+      "roads",
+      "building-block",
+      "interior",
+      "props",
+      "vegetation",
+      "vehicles",
+      "characters"
+    ]
+  },
+  "gameplay": {
+    "sourceOfTruth": "shared/contracts + shared/gameplay",
+    "runtimeWeb": "PlayCanvas",
+    "runtimeNative": "Unity",
+    "serverAuthority": "UniversalServer"
+  },
+  "sync": {
+    "identity": "UniversalServer.playerId",
+    "persistentState": "UniversalServer",
+    "address": "UniversalServer geocode result",
+    "streetView": "UniversalServer resolved metadata/image routes",
+    "sharedGameplayRules": "shared/gameplay/game-rules.json"
+  }
+}
