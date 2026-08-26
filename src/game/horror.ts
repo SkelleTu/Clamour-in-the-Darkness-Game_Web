@@ -1,69 +1,102 @@
-import * as THREE from 'three';
+import * as pc from 'playcanvas';
 import { RULES } from './rules';
+import type { Vec3State } from './player';
 
 export type HorrorEvent = {
   id: string;
-  position: THREE.Vector3;
-  mesh: THREE.Mesh;
+  position: Vec3State;
+  entity: pc.Entity;
   timer: number;
   fading: boolean;
 };
 
-const _manifestMat = new THREE.MeshStandardMaterial({
-  color: 0xcc0022, emissive: new THREE.Color(0x660011), emissiveIntensity: 1,
-  transparent: true, opacity: 0.85,
-  roughness: 0.4,
-});
+function createHorrorMaterial() {
+  const mat = new pc.StandardMaterial();
+  mat.diffuse = new pc.Color(0.8, 0, 0.13);
+  mat.emissive = new pc.Color(0.4, 0, 0.04);
+  mat.emissiveIntensity = 1.5;
+  mat.opacity = 0.85;
+  mat.blendType = pc.BLEND_NORMAL;
+  mat.update();
+  return mat;
+}
 
-export function spawnHorrorEvent(scene: THREE.Scene, playerPos: THREE.Vector3): HorrorEvent {
+export function spawnHorrorEvent(
+  app: pc.Application,
+  playerPos: Vec3State,
+): HorrorEvent {
   const angle = Math.random() * Math.PI * 2;
-  const dist = RULES.horror.distanceMeters;
-  const pos = new THREE.Vector3(
-    playerPos.x + Math.cos(angle) * dist,
-    playerPos.y,
-    playerPos.z + Math.sin(angle) * dist,
-  );
+  const distance = RULES.horror.distanceMeters;
+  const position: Vec3State = {
+    x: playerPos.x + Math.cos(angle) * distance,
+    y: 1.1,
+    z: playerPos.z + Math.sin(angle) * distance,
+  };
 
-  const geo = new THREE.ConeGeometry(0.3, 2.2, 8);
-  const mat = _manifestMat.clone();
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.copy(pos).setY(1.1);
-  mesh.scale.set(0, 0, 0);
-  scene.add(mesh);
+  const entity = new pc.Entity(`HORROR_${Math.random().toString(36).slice(2)}`);
+  entity.addComponent('render', { type: 'cone' });
+  entity.setPosition(position.x, position.y, position.z);
+  entity.setLocalScale(0.01, 0.01, 0.01);
+  entity.render!.material = createHorrorMaterial();
+  app.root.addChild(entity);
 
-  const light = new THREE.PointLight(0xff0022, 2.5, 8, 2);
-  light.position.copy(mesh.position);
-  mesh.add(light);
+  const light = new pc.Entity('ManifestationLight');
+  light.addComponent('light', {
+    type: 'omni',
+    color: new pc.Color(1, 0, 0.1),
+    intensity: 2.5,
+    range: 8,
+  });
+  entity.addChild(light);
 
   return {
-    id: Math.random().toString(36).slice(2),
-    position: pos,
-    mesh,
+    id: entity.name,
+    position,
+    entity,
     timer: RULES.horror.manifestationSeconds,
     fading: false,
   };
 }
 
-export function updateHorrorEvents(events: HorrorEvent[], dt: number, scene: THREE.Scene) {
+export function updateHorrorEvents(
+  events: HorrorEvent[],
+  dt: number,
+) {
   const totalDuration = RULES.horror.manifestationSeconds;
-  for (let i = events.length - 1; i >= 0; i--) {
-    const ev = events[i];
-    ev.timer -= dt;
 
-    const progress = 1 - ev.timer / totalDuration;
-    if (!ev.fading) {
-      const s = Math.min(1, progress * 3);
-      ev.mesh.scale.setScalar(s);
-      ev.mesh.rotation.y += dt * 2;
-      (ev.mesh.material as THREE.MeshStandardMaterial).opacity = Math.min(0.85, s);
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i];
+    event.timer -= dt;
+
+    const progress =
+      1 - event.timer / totalDuration;
+
+    if (!event.fading) {
+      const scale = Math.min(1, progress * 3);
+      event.entity.setLocalScale(scale, scale, scale);
+      event.entity.rotate(0, dt * 120, 0);
+
+      if (event.entity.render?.material) {
+        const mat = event.entity.render.material as pc.StandardMaterial;
+        mat.opacity = Math.min(0.85, scale);
+        mat.update();
+      }
     }
 
-    if (ev.timer <= 0) {
-      ev.fading = true;
-      (ev.mesh.material as THREE.MeshStandardMaterial).opacity -= dt * 2;
-      ev.mesh.scale.multiplyScalar(0.95);
-      if ((ev.mesh.material as THREE.MeshStandardMaterial).opacity <= 0) {
-        scene.remove(ev.mesh);
+    if (event.timer <= 0) {
+      event.fading = true;
+
+      if (event.entity.render?.material) {
+        const mat = event.entity.render.material as pc.StandardMaterial;
+        mat.opacity = Math.max(0, mat.opacity - dt * 2);
+        mat.update();
+
+        if (mat.opacity <= 0) {
+          event.entity.destroy();
+          events.splice(i, 1);
+        }
+      } else {
+        event.entity.destroy();
         events.splice(i, 1);
       }
     }
