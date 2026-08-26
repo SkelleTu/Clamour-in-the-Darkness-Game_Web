@@ -30,6 +30,26 @@ When changing a shared gameplay rule, also update the Unity client contract/sour
 - Keep browser UI/DOM/React separate from the gameplay renderer.
 - Prefer PlayCanvas entities, components and assets for gameplay runtime state.
 
+## PlayCanvas Editor source packaging
+
+The PlayCanvas Editor is not a generic Vite/React/TypeScript runtime.
+
+- NEVER import the repository's entire `src/` tree into PlayCanvas as Script Assets.
+- NEVER import `.ts` or `.tsx` source files into the PlayCanvas Editor as gameplay scripts.
+- NEVER attach React components such as `App.tsx`, `AddressPrompt.tsx`, `HUD.tsx` or `TouchControls.tsx` as PlayCanvas Script Assets.
+- NEVER attach Vite entry points such as `main.tsx` as PlayCanvas Script Assets.
+- NEVER attach backend/client-library implementation files such as Supabase or generic service modules merely because they exist under `src/`.
+- Browser UI code remains outside the PlayCanvas gameplay scene.
+- PlayCanvas Editor gameplay scripts must be packaged as PlayCanvas-supported `.mjs` ESM Script Assets or `.js` Classic Script Assets.
+- For modern PlayCanvas gameplay, prefer `.mjs` ESM Script Assets.
+- ESM gameplay modules may use `import`/`export`, but the files imported into the Editor must themselves be valid `.mjs` assets and imports must resolve through the PlayCanvas asset/module system.
+- Do not rename a `.ts` file to `.mjs` without actually converting/removing TypeScript syntax and fixing module paths.
+- Do not copy Vite path aliases such as `@/game/...` into PlayCanvas ESM assets unless an explicit PlayCanvas import map resolves them.
+- Do not copy React, JSX, Tailwind, Vite-only environment syntax or bundler-only assumptions into PlayCanvas Script Assets.
+- Keep PlayCanvas-specific runtime source in an explicit import/export surface such as `playcanvas/scripts/` or an equivalent clearly documented directory.
+- Use PlayCanvas's source/asset synchronization workflow or the Editor's Script Assets for the `.mjs`/`.js` runtime surface; use MCP for Editor attachments, attributes, scene entities and launch verification.
+- A successful Git/Vite build is not evidence that the Editor can execute the same source files directly.
+
 ## Unity asset pipeline
 
 Unity may author world geometry, characters, vehicles, props and animations.
@@ -210,4 +230,4 @@ After changing runtime dependencies, regenerate and commit `package-lock.json` w
 
 - Project ID: `1588287`
 - Main Scene ID: `2581837`
-- MCP port: `52000`
+- MCP port: `52001`
