@@ -58,6 +58,146 @@ For a runtime bug:
 
 Do not “fix” a runtime bug by disabling security, removing error reporting or weakening the UniversalServer contract.
 
+## Long-running work and retry resilience
+
+This repository is intended to support long-running imports, migrations, PlayCanvas asset processing and runtime validation. Transient tool failures must not be treated as final task failures.
+
+### Retryable failures
+
+Treat the following as retryable unless there is evidence of a permanent cause:
+
+- HTTP 408
+- HTTP 425
+- HTTP 429
+- HTTP 500
+- HTTP 502
+- HTTP 503
+- HTTP 504
+- `Upstream idle timeout exceeded`
+- upstream/gateway timeout errors
+- `connection reset`
+- `connection closed`
+- `socket hang up`
+- `ECONNRESET`
+- `ETIMEDOUT`
+- network timeout/unavailable errors
+- transient MCP failures
+- transient PlayCanvas MCP failures
+- transient browser automation failures
+- transient upload/import failures
+
+If a tool error explicitly contains `isRetryable: true`, treat it as retryable.
+
+### Retry policy
+
+When a retryable failure occurs:
+
+1. Do not abandon the overall task.
+2. Do not report the stage as permanently failed.
+3. Preserve the last confirmed progress point.
+4. Determine whether the operation completed partially before retrying.
+5. Wait using progressive backoff:
+   - attempt 1: 2 seconds;
+   - attempt 2: 5 seconds;
+   - attempt 3: 10 seconds;
+   - attempt 4: 20 seconds;
+   - attempt 5: 30 seconds;
+   - subsequent attempts: up to 60 seconds between retries.
+6. Retry the smallest failed operation possible.
+7. Verify the result before advancing.
+8. Continue from the last confirmed checkpoint.
+
+If the service remains temporarily unavailable, continue retrying periodically rather than abandoning a long-running task, unless the environment explicitly terminates the session.
+
+### Idempotency and duplicate protection
+
+Before repeating creation, import, upload or modification operations:
+
+- check whether the operation already succeeded;
+- do not duplicate assets;
+- do not duplicate entities;
+- do not duplicate files;
+- do not create duplicate PlayCanvas imports;
+- prefer stable asset names, IDs, hashes or checkpoints when available.
+
+When an operation is not safely idempotent, inspect state first and recover from the last confirmed result instead of blindly repeating it.
+
+### Long-running asset imports
+
+Do not treat a large import as one monolithic operation.
+
+Process assets in small, recoverable batches when practical.
+
+For each batch:
+
+1. identify the batch;
+2. import/process it;
+3. verify completion;
+4. record progress;
+5. continue to the next batch.
+
+If a single asset fails, retry that asset or the smallest affected batch instead of restarting the entire import.
+
+### Progress checkpoints
+
+Maintain a durable progress record whenever the task is long-running. The progress state should include, when applicable:
+
+- current stage;
+- last completed stage;
+- current batch;
+- last successfully imported asset;
+- last successfully processed file;
+- last error;
+- retry count;
+- last retry timestamp;
+- next intended action.
+
+A retry must resume from the last confirmed point.
+
+### MCP recovery
+
+If PlayCanvas MCP disconnects or a tool call fails temporarily:
+
+1. verify whether the PlayCanvas Editor is still open;
+2. verify whether the MCP server is still listening;
+3. reconnect the MCP if necessary;
+4. preserve the current project and Launch state whenever possible;
+5. retry the failed operation;
+6. continue the task after recovery.
+
+Do not restart the complete project as the first response to a transient MCP failure.
+
+### Launch and browser recovery
+
+If Launch or browser automation fails transiently:
+
+- retry the operation;
+- preserve the current Launch session when possible;
+- confirm whether the runtime is still alive before relaunching;
+- only perform a full restart when incremental recovery fails or a clean restart is technically required.
+
+### Permanent failures
+
+Stop and request human intervention only when:
+
+- the error is clearly non-retryable;
+- repeated retries establish a persistent permanent failure;
+- credentials/permissions are missing and cannot be resolved automatically;
+- continuing could corrupt the project or assets;
+- a required architectural decision cannot be inferred safely.
+
+### Continuation rule
+
+The default response to a transient failure is:
+
+`RETRY -> VERIFY -> CHECKPOINT -> CONTINUE`
+
+not:
+
+`FAIL -> STOP`
+
+A tool timeout does not mean that the underlying operation failed. Always verify the actual repository/PlayCanvas state before deciding to repeat or roll back work.
+
 ## Secrets
 
 Never commit API keys, bearer tokens, passwords, cookies or private credentials.
