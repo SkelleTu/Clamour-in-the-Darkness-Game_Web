@@ -19,7 +19,7 @@ function bearingBetween(lat1: number, lon1: number, lat2: number, lon2: number) 
   const phi2 = lat2 * Math.PI / 180;
   const delta = (lon2 - lon1) * Math.PI / 180;
   const y = Math.sin(delta) * Math.cos(phi2);
-  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(phi2) * Math.cos(delta);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(delta);
   const deg = Math.atan2(y, x) * 180 / Math.PI;
   return (deg + 360) % 360;
 }
