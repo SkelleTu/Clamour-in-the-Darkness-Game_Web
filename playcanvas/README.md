@@ -11,25 +11,42 @@ This directory defines the Web runtime contract for the Clamour project.
 
 The Web client must never become a second game with a second identity system or a second gameplay database.
 
+## Editor import boundary
+
+The PlayCanvas Editor is **not** the Vite/React/TypeScript runtime.
+
+Only the explicit PlayCanvas runtime surface may be imported into the Editor as Script Assets:
+
+```text
+playcanvas/scripts/
+  clamour-runtime.mjs   <- entrypoint
+  input.mjs
+  player.mjs
+  world.mjs
+```
+
+Rules:
+
+- Import `.mjs` ESM Script Assets for modern gameplay code.
+- Do not import `src/` as Script Assets.
+- Do not import `.ts` or `.tsx` files as Script Assets.
+- Do not attach React/Vite UI files to PlayCanvas entities.
+- Do not rename TypeScript files to `.mjs` without converting them to real JavaScript ESM.
+- Do not copy Vite aliases such as `@/game/...` into Editor scripts.
+- Keep React/Vite browser UI outside the PlayCanvas gameplay scene.
+
+`playcanvas/IMPORT_MANIFEST.json` is the source of truth for this boundary.
+
 ## Import pipeline
 
 1. Build and author world geometry, characters, props and animation in Unity.
 2. Export runtime-ready assets as GLB/glTF with stable node, material and animation names.
 3. Import the assets into the PlayCanvas project.
-4. Keep collision, interaction, networking and gameplay logic in the PlayCanvas runtime rather than attempting to import Unity C# behaviour.
-5. Use the same shared gameplay contract and UniversalServer state as Unity.
+4. Import only the PlayCanvas ESM runtime surface from `playcanvas/scripts/`.
+5. Keep collision, interaction, networking and gameplay logic in the PlayCanvas runtime rather than attempting to import Unity C# behaviour.
+6. Use the same shared gameplay contract and UniversalServer state as Unity.
 
-## Asset rules
-
-- Prefer GLB for model delivery.
-- Keep the map divided into address/world zones instead of a single monolith.
-- Preserve node names.
-- Preserve material names.
-- Preserve animation names.
-- Keep gameplay-independent art separate from runtime scripts.
-- Never treat Unity prefabs, C# components, Rigidbody settings or NavMesh data as portable game logic.
-
-## Runtime rules
+## Runtime
 
 The PlayCanvas runtime is responsible for:
 
