@@ -1,0 +1,43 @@
+{
+  "contract": "ClamourClientContract",
+  "version": "2",
+  "server": {
+    "role": "UniversalServer",
+    "rule": "Web and Unity are clients of the same game and must use the same identity, gameplay persistence and server routes."
+  },
+  "auth": {
+    "register": "POST /api/game/auth/register",
+    "login": "POST /api/game/auth/login",
+    "session": "GET /api/game/auth/session"
+  },
+  "world": {
+    "geocode": "GET /api/game/google/geocode?address=...",
+    "streetviewMetadata": "GET /api/game/streetview/metadata?lat=...&lng=...&radius=100",
+    "streetviewImage": "GET /api/game/streetview/image?pano=...&lat=...&lng=...&heading=...&pitch=...&fov=...&width=...&height=..."
+  },
+  "playerState": {
+    "get": "GET /api/game/auth/player-state/:playerId",
+    "put": "PUT /api/game/auth/player-state/:playerId",
+    "canonicalFields": [
+      "playerId",
+      "homeAddress",
+      "homeLat",
+      "homeLon",
+      "posX",
+      "posY",
+      "posZ",
+      "yaw"
+    ]
+  },
+  "identity": {
+    "sourceOfTruth": "UniversalServer",
+    "webStorage": "localStorage",
+    "unityStorage": "PlayerPrefs",
+    "rule": "Neither client invents a replacement playerId after authentication."
+  },
+  "platforms": {
+    "web": "PlayCanvas Engine 2.x",
+    "unity": "Unity 6",
+    "server": "UniversalServer"
+  }
+}
