@@ -46,8 +46,12 @@ The PlayCanvas Editor is not a generic Vite/React/TypeScript runtime.
 - Do not rename a `.ts` file to `.mjs` without actually converting/removing TypeScript syntax and fixing module paths.
 - Do not copy Vite path aliases such as `@/game/...` into PlayCanvas ESM assets unless an explicit PlayCanvas import map resolves them.
 - Do not copy React, JSX, Tailwind, Vite-only environment syntax or bundler-only assumptions into PlayCanvas Script Assets.
-- Keep PlayCanvas-specific runtime source in an explicit import/export surface such as `playcanvas/scripts/` or an equivalent clearly documented directory.
-- Use PlayCanvas's source/asset synchronization workflow or the Editor's Script Assets for the `.mjs`/`.js` runtime surface; use MCP for Editor attachments, attributes, scene entities and launch verification.
+- The only repository runtime surface intended for direct Editor Script Asset import is `playcanvas/scripts/`.
+- The PlayCanvas entrypoint is `playcanvas/scripts/clamour-runtime.mjs`.
+- Current supporting ESM runtime modules are `playcanvas/scripts/input.mjs`, `playcanvas/scripts/player.mjs` and `playcanvas/scripts/world.mjs`.
+- Import the complete `playcanvas/scripts/` dependency chain into the Editor, not individual `.ts/.tsx` source files.
+- Do not attach both the ESM entrypoint and equivalent legacy source modules to the same entity.
+- Use `playcanvas/IMPORT_MANIFEST.json` as the import allowlist.
 - A successful Git/Vite build is not evidence that the Editor can execute the same source files directly.
 
 ## Unity asset pipeline
