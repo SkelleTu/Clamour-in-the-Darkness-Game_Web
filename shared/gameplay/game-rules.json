@@ -1,0 +1,85 @@
+{
+  "game": "Clamour in the Darkness",
+  "version": "parity-2",
+  "world": {
+    "defaultLatitude": -22.3572,
+    "defaultLongitude": -47.3841,
+    "city": "Araras",
+    "country": "BR"
+  },
+  "movement": {
+    "walkSpeed": 3.8,
+    "sprintSpeed": 6.2,
+    "acceleration": 18.0,
+    "deceleration": 22.0,
+    "rotationSpeed": 14.0,
+    "gravity": -24.0,
+    "jumpHeight": 1.45,
+    "slopeLimit": 48.0,
+    "controllerRadius": 0.32,
+    "controllerHeight": 1.8,
+    "stepOffset": 0.22,
+    "skinWidth": 0.04,
+    "carrySpeedMultiplierMin": 0.1,
+    "carrySpeedMultiplierMax": 1.0
+  },
+  "stumble": {
+    "enabled": true,
+    "minimumObstacleHeight": 0.16,
+    "maxObstacleHeight": 0.62,
+    "cooldownSeconds": 1.25,
+    "durationSeconds": 0.45,
+    "speedThreshold": 2.4,
+    "speedLoss": 0.55,
+    "verticalImpulse": 1.5
+  },
+  "camera": {
+    "eyeHeight": 1.62,
+    "lookSensitivity": 0.075,
+    "minPitch": -78,
+    "maxPitch": 82,
+    "walkBobFrequency": 7,
+    "sprintBobFrequency": 10.5,
+    "walkBobAmplitude": 0.018,
+    "sprintBobAmplitude": 0.035,
+    "landingKick": 0.055,
+    "stumbleRoll": 5.5,
+    "stumblePitch": 4
+  },
+  "vitals": {
+    "maxHealth": 100,
+    "maxStamina": 100,
+    "sprintDrainPerSecond": 20,
+    "staminaRegenPerSecond": 12,
+    "exhaustionThreshold": 1
+  },
+  "interaction": {
+    "interactKey": "KeyE",
+    "pickupRange": 2.2,
+    "sprintKeys": ["ShiftLeft", "ShiftRight"],
+    "jumpKey": "Space"
+  },
+  "streetView": {
+    "passive": true,
+    "metadataRadiusMeters": 70,
+    "imageWidth": 1024,
+    "imageHeight": 640,
+    "fov": 96,
+    "requestDebounceMs": 1200
+  },
+  "horror": {
+    "manifestationSeconds": 2.6,
+    "distanceMeters": 7,
+    "sharedEventPollingMs": 1200
+  },
+  "persistence": {
+    "autosaveSeconds": 3,
+    "restoreLastPosition": true,
+    "initialSpawnFromHome": true
+  },
+  "network": {
+    "playerDirectoryLimit": 64,
+    "eventLimit": 100,
+    "heartbeatMs": 500
+  }
+}
