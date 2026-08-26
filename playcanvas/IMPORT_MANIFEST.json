@@ -1,11 +1,26 @@
 {
   "format": "PlayCanvas-Web-Import",
-  "version": 1,
+  "version": 2,
   "runtime": {
     "engine": "PlayCanvas Engine 2.x",
     "graphics": ["WebGL2", "WebGPU"],
     "unitScaleMeters": 1,
     "sourceEngine": "Unity 6"
+  },
+  "editorImport": {
+    "allowedScriptRoots": [
+      "playcanvas/scripts/"
+    ],
+    "entrypoint": "playcanvas/scripts/clamour-runtime.mjs",
+    "scriptFormats": [".mjs"],
+    "sourceRootsNotImportableAsScripts": [
+      "src/",
+      "src/components/",
+      "src/game/",
+      "src/lib/"
+    ],
+    "forbiddenScriptExtensions": [".ts", ".tsx"],
+    "forbiddenUiSources": ["React", "JSX", "Vite"]
   },
   "assetPolicy": {
     "preferredModelFormat": "glb",
