@@ -1,65 +1,112 @@
-import * as THREE from 'three';
-import { streetViewImageUrl, type StreetViewMetadata } from '@/lib/universalServer';
+import {
+  streetViewImageUrl,
+  type StreetViewMetadata,
+} from '@/lib/universalServer';
 
 export type StreetViewEnvironment = {
-  mesh: THREE.Mesh;
   attribution: string | null;
+  refresh: (metadata: StreetViewMetadata, heading: number, pitch: number) => Promise<void>;
   dispose: () => void;
 };
 
-function textureFromUrl(loader: THREE.TextureLoader, url: string): Promise<THREE.Texture> {
-  return new Promise((resolve, reject) => {
-    loader.load(url, resolve, undefined, reject);
-  });
-}
-
-export async function createStreetViewEnvironment(
-  scene: THREE.Scene,
+export function createStreetViewEnvironment(
+  canvas: HTMLCanvasElement,
   metadata: StreetViewMetadata,
-): Promise<StreetViewEnvironment> {
-  const loader = new THREE.TextureLoader();
-  loader.setCrossOrigin('anonymous');
+): StreetViewEnvironment {
+  const parent = canvas.parentElement;
+  if (!parent) {
+    throw new Error('PlayCanvas canvas parent not found.');
+  }
 
-  const headings = [90, 270, 0, 180];
-  const textures = await Promise.all(
-    headings.map((heading) => textureFromUrl(loader, streetViewImageUrl({
-      pano: metadata.pano,
-      lat: metadata.location.lat,
-      lon: metadata.location.lng,
+  const element = document.createElement('div');
+  element.dataset.clamourStreetView = 'true';
+  Object.assign(element.style, {
+    position: 'absolute',
+    inset: '0',
+    zIndex: '0',
+    pointerEvents: 'none',
+    backgroundColor: '#05060a',
+    backgroundPosition: 'center',
+    backgroundSize: 'cover',
+    backgroundRepeat: 'no-repeat',
+  });
+
+  canvas.style.position = 'absolute';
+  canvas.style.zIndex = '1';
+  canvas.style.background = 'transparent';
+
+  parent.insertBefore(element, canvas);
+
+  let currentObjectUrl: string | null = null;
+  let requestId = 0;
+  let attribution = metadata.copyright;
+
+  const load = async (
+    nextMetadata: StreetViewMetadata,
+    heading: number,
+    pitch: number,
+  ) => {
+    const serial = ++requestId;
+    const url = streetViewImageUrl({
+      pano: nextMetadata.pano,
+      lat: nextMetadata.location.lat,
+      lon: nextMetadata.location.lng,
       heading,
-      pitch: 0,
-      fov: 90,
-      width: 640,
+      pitch,
+      fov: 96,
+      width: 1024,
       height: 640,
-    }))),
-  );
+    });
 
-  const materials = [
-    new THREE.MeshBasicMaterial({ map: textures[0], side: THREE.BackSide }),
-    new THREE.MeshBasicMaterial({ map: textures[1], side: THREE.BackSide }),
-    new THREE.MeshBasicMaterial({ color: 0x10131a, side: THREE.BackSide }),
-    new THREE.MeshBasicMaterial({ color: 0x050507, side: THREE.BackSide }),
-    new THREE.MeshBasicMaterial({ map: textures[2], side: THREE.BackSide }),
-    new THREE.MeshBasicMaterial({ map: textures[3], side: THREE.BackSide }),
-  ];
+    const response = await fetch(url, {
+      headers: { Accept: 'image/*' },
+    });
 
-  const geometry = new THREE.BoxGeometry(180, 90, 180);
-  const mesh = new THREE.Mesh(geometry, materials);
-  mesh.renderOrder = -10;
-  scene.add(mesh);
-
-  const dispose = () => {
-    geometry.dispose();
-    for (const material of materials) {
-      material.map?.dispose();
-      material.dispose();
+    if (!response.ok) {
+      throw new Error(
+        `Street View image request failed: HTTP ${response.status}`,
+      );
     }
-    scene.remove(mesh);
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const image = new Image();
+    image.decoding = 'async';
+    image.src = objectUrl;
+    await image.decode();
+
+    if (serial !== requestId) {
+      URL.revokeObjectURL(objectUrl);
+      return;
+    }
+
+    if (currentObjectUrl) {
+      URL.revokeObjectURL(currentObjectUrl);
+    }
+
+    currentObjectUrl = objectUrl;
+    element.style.backgroundImage = `url("${objectUrl}")`;
+    attribution = nextMetadata.copyright;
   };
 
+  void load(metadata, 0, 0).catch(() => {
+    element.style.backgroundImage = '';
+  });
+
   return {
-    mesh,
-    attribution: metadata.copyright,
-    dispose,
+    get attribution() {
+      return attribution;
+    },
+    refresh: async (nextMetadata, heading, pitch) => {
+      await load(nextMetadata, heading, pitch);
+    },
+    dispose: () => {
+      requestId += 1;
+      if (currentObjectUrl) {
+        URL.revokeObjectURL(currentObjectUrl);
+        currentObjectUrl = null;
+      }
+      element.remove();
+    },
   };
 }
