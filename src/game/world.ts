@@ -8,6 +8,7 @@ export type WorldObject = {
 };
 
 export type World = {
+  root: pc.Entity;
   objects: WorldObject[];
   colliders: BoxCollider[];
 };
@@ -30,7 +31,6 @@ function material(
 }
 
 function addBox(
-  app: pc.Application,
   parent: pc.Entity,
   id: string,
   x: number,
@@ -48,7 +48,6 @@ function addBox(
   entity.setLocalScale(sx, sy, sz);
   entity.render!.material = mat;
   parent.addChild(entity);
-  app.root.addChild(parent);
 
   return { entity, collider, id };
 }
@@ -71,8 +70,7 @@ export function buildWorld(app: pc.Application): World {
     0.7,
   );
 
-  addBox(
-    app,
+  objects.push(addBox(
     root,
     'Ground',
     0,
@@ -82,11 +80,10 @@ export function buildWorld(app: pc.Application): World {
     0.08,
     200,
     groundMat,
-  );
+  ));
 
   for (const side of [-1, 1]) {
-    addBox(
-      app,
+    objects.push(addBox(
       root,
       `Sidewalk_${side > 0 ? 'R' : 'L'}`,
       side * 8,
@@ -96,73 +93,72 @@ export function buildWorld(app: pc.Application): World {
       0.06,
       200,
       sidewalkMat,
-    );
+    ));
   }
 
-  const addBuilding = (
-    side: number,
-    index: number,
-  ) => {
-    const width = 6 + ((index + 6) % 5);
-    const height = 7 + ((index + 11) % 14);
-    const depth = 6 + ((index + 3) % 4);
-    const z = index * 14;
-    const x = side < 0 ? -12 - depth / 2 - 1 : 12 + depth / 2 + 1;
-    const collider: BoxCollider = {
-      minX: x - width / 2,
-      maxX: x + width / 2,
-      minZ: z - depth / 2,
-      maxZ: z + depth / 2,
-    };
+  for (const side of [-1, 1]) {
+    for (let index = -5; index <= 5; index++) {
+      const width = 6 + ((index + 6) % 5);
+      const height = 7 + ((index + 11) % 14);
+      const depth = 6 + ((index + 3) % 4);
+      const z = index * 14;
+      const x = side < 0
+        ? -12 - depth / 2 - 1
+        : 12 + depth / 2 + 1;
 
-    const building = addBox(
-      app,
-      root,
-      `BLDG_Block_${side}_${index}`,
-      x,
-      height / 2,
-      z,
-      width,
-      height,
-      depth,
-      buildingMat,
-      collider,
-    );
+      const collider: BoxCollider = {
+        minX: x - width / 2,
+        maxX: x + width / 2,
+        minZ: z - depth / 2,
+        maxZ: z + depth / 2,
+      };
 
-    objects.push(building);
-    colliders.push(collider);
+      const building = addBox(
+        root,
+        `BLDG_Block_${side}_${index}`,
+        x,
+        height / 2,
+        z,
+        width,
+        height,
+        depth,
+        buildingMat,
+        collider,
+      );
 
-    const rows = Math.max(1, Math.floor(height / 2.5));
-    const cols = Math.max(1, Math.floor(width / 1.8));
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        const window = new pc.Entity(`WINDOW_${side}_${index}_${row}_${col}`);
-        window.addComponent('render', { type: 'box' });
-        window.setLocalScale(0.6, 0.9, 0.04);
-        window.setLocalPosition(
-          side < 0
-            ? x + width / 2 + 0.02
-            : x - width / 2 - 0.02,
-          1.5 + row * 2.5,
-          z - depth / 2 + 0.9 + col * 1.8,
-        );
-        window.setLocalEulerAngles(0, side < 0 ? 90 : -90, 0);
-        window.render!.material = windowMat;
-        root.addChild(window);
+      objects.push(building);
+      colliders.push(collider);
+
+      const rows = Math.max(1, Math.floor(height / 2.5));
+      const cols = Math.max(1, Math.floor(width / 1.8));
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const window = new pc.Entity(
+            `WINDOW_${side}_${index}_${row}_${col}`,
+          );
+          window.addComponent('render', { type: 'box' });
+          window.setLocalScale(0.6, 0.9, 0.04);
+          window.setLocalPosition(
+            side < 0
+              ? x + width / 2 + 0.02
+              : x - width / 2 - 0.02,
+            1.5 + row * 2.5,
+            z - depth / 2 + 0.9 + col * 1.8,
+          );
+          window.setLocalEulerAngles(
+            0,
+            side < 0 ? 90 : -90,
+            0,
+          );
+          window.render!.material = windowMat;
+          root.addChild(window);
+        }
       }
     }
-  };
-
-  for (let index = -5; index <= 5; index++) {
-    addBuilding(-1, index);
-    addBuilding(1, index);
   }
 
   for (let index = -4; index <= 4; index++) {
-    for (const [side, offset] of [
-      [-7, 0],
-      [7, 9],
-    ] as const) {
+    for (const [side, offset] of [[-7, 0], [7, 9]] as const) {
       const lamp = new pc.Entity(`LAMP_${index}_${side}`);
       lamp.addComponent('render', { type: 'cylinder' });
       lamp.setLocalScale(0.08, 4.5, 0.08);
@@ -170,14 +166,20 @@ export function buildWorld(app: pc.Application): World {
       lamp.render!.material = lampMat;
       root.addChild(lamp);
 
-      const light = new pc.Entity(`LAMP_LIGHT_${index}_${side}`);
+      const light = new pc.Entity(
+        `LAMP_LIGHT_${index}_${side}`,
+      );
       light.addComponent('light', {
         type: 'omni',
         color: new pc.Color(1, 0.92, 0.7),
         intensity: 1.4,
         range: 14,
       });
-      light.setLocalPosition(side, 4.3, index * 18 + offset);
+      light.setLocalPosition(
+        side,
+        4.3,
+        index * 18 + offset,
+      );
       root.addChild(light);
     }
   }
@@ -193,7 +195,6 @@ export function buildWorld(app: pc.Application): World {
     };
 
     const bin = addBox(
-      app,
       root,
       `PROP_Bin_${index}`,
       x,
@@ -210,11 +211,9 @@ export function buildWorld(app: pc.Application): World {
     colliders.push(collider);
   }
 
-  return { objects, colliders };
+  return { root, objects, colliders };
 }
 
 export function destroyWorld(world: World) {
-  for (const object of world.objects) {
-    object.entity.destroy();
-  }
+  world.root.destroy();
 }
