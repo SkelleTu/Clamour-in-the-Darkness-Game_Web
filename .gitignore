@@ -21,3 +21,13 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Playwright / browser automation artifacts
+.playwright-mcp/
+
+# Temporary local scripts
+play.sh
+run-universal-server.sh
+
+# Embedded backend repo (tracked separately)
+universal-server-main/
