@@ -100,7 +100,7 @@ export function AddressPrompt({ onConfirm }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#060608]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#060608] pointer-events-auto"
       style={{ touchAction: 'manipulation' }}
     >
       {/* Vignette */}

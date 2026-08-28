@@ -11,7 +11,7 @@ npm run dev
 
 Opcionalmente defina:
 
-- `VITE_UNIVERSAL_SERVER_URL` = `https://universal-server--charlesespurgeo.replit.app`
+- `VITE_UNIVERSAL_SERVER_URL` = `https://8a633c91-af06-433f-bcc1-935fd1a30999-00-34qq6ibzhv4b4.riker.replit.dev`
 - `VITE_UNIVERSAL_SERVER_API_KEY` = chave do projeto do Universal Server
 
 A API Key do Google **não fica no navegador**. O navegador chama o Universal Server, que faz as chamadas Google do lado do servidor.

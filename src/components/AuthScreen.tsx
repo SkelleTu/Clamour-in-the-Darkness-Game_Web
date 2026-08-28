@@ -14,6 +14,7 @@ export function AuthScreen({ onAuthenticated }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const submit = async () => {
     setError('');
@@ -36,7 +37,10 @@ export function AuthScreen({ onAuthenticated }: Props) {
       const session = mode === 'register'
         ? await register(normalized, password)
         : await login(normalized, password);
-      onAuthenticated(session);
+      if (mode === 'register') {
+        setSuccess('Conta criada com sucesso.');
+      }
+      setTimeout(() => onAuthenticated(session), mode === 'register' ? 900 : 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível acessar sua conta.');
     } finally {
@@ -45,7 +49,7 @@ export function AuthScreen({ onAuthenticated }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-[#050507] text-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-[#050507] text-white pointer-events-auto">
       <div className="absolute inset-0 opacity-[0.18] bg-[radial-gradient(circle_at_50%_38%,rgba(255,255,255,0.12),transparent_32%),radial-gradient(circle_at_20%_80%,rgba(75,85,99,0.1),transparent_32%),radial-gradient(circle_at_80%_20%,rgba(30,41,59,0.2),transparent_30%)]" />
       <div className="absolute inset-0 opacity-[0.045] pointer-events-none [background-image:linear-gradient(rgba(255,255,255,.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.06)_1px,transparent_1px)] [background-size:32px_32px]" />
 
@@ -135,11 +139,17 @@ export function AuthScreen({ onAuthenticated }: Props) {
               </label>
             )}
 
-            {error && (
-              <div className="rounded-xl border border-red-400/15 bg-red-400/5 px-4 py-3 text-xs font-mono leading-relaxed text-red-300/80">
-                {error}
-              </div>
-            )}
+             {error && (
+               <div className="rounded-xl border border-red-400/15 bg-red-400/5 px-4 py-3 text-xs font-mono leading-relaxed text-red-300/80">
+                 {error}
+               </div>
+             )}
+
+             {success && (
+               <div className="rounded-xl border border-emerald-400/15 bg-emerald-400/5 px-4 py-3 text-xs font-mono leading-relaxed text-emerald-300/80">
+                 {success}
+               </div>
+             )}
 
             <button
               type="button"

@@ -22,26 +22,31 @@ export async function createStreetViewEnvironment(
 
   const headings = [90, 270, 0, 180];
   const textures = await Promise.all(
-    headings.map((heading) => textureFromUrl(loader, streetViewImageUrl({
-      pano: metadata.pano,
-      lat: metadata.location.lat,
-      lon: metadata.location.lng,
-      heading,
-      pitch: 0,
-      fov: 90,
-      width: 640,
-      height: 640,
-    }))),
+    headings.map(async (heading) => {
+      try {
+        return await textureFromUrl(loader, streetViewImageUrl({
+          pano: metadata.pano,
+          lat: metadata.location.lat,
+          lon: metadata.location.lng,
+          heading,
+          pitch: 0,
+          fov: 90,
+          width: 640,
+          height: 640,
+        }));
+      } catch {
+        return null;
+      }
+    }),
   );
 
-  const materials = [
-    new THREE.MeshBasicMaterial({ map: textures[0], side: THREE.BackSide }),
-    new THREE.MeshBasicMaterial({ map: textures[1], side: THREE.BackSide }),
-    new THREE.MeshBasicMaterial({ color: 0x10131a, side: THREE.BackSide }),
-    new THREE.MeshBasicMaterial({ color: 0x050507, side: THREE.BackSide }),
-    new THREE.MeshBasicMaterial({ map: textures[2], side: THREE.BackSide }),
-    new THREE.MeshBasicMaterial({ map: textures[3], side: THREE.BackSide }),
-  ];
+  const materials = textures.map((texture, index) => {
+    if (texture) {
+      return new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
+    }
+    const dark = index < 2 ? 0x10131a : 0x050507;
+    return new THREE.MeshBasicMaterial({ color: dark, side: THREE.BackSide });
+  });
 
   const geometry = new THREE.BoxGeometry(180, 90, 180);
   const mesh = new THREE.Mesh(geometry, materials);

@@ -22,7 +22,7 @@ type PositionState = {
   pano?: string;
 };
 
-const SERVER = import.meta.env.VITE_UNIVERSAL_SERVER_URL || 'https://universal-server--charlesespurgeo.replit.app';
+const SERVER = import.meta.env.VITE_UNIVERSAL_SERVER_URL || 'https://spicy-chairs-learn.loca.lt';
 const API_KEY = import.meta.env.VITE_UNIVERSAL_SERVER_API_KEY || localStorage.getItem('clamour_api_key') || '';
 const ARARAS = { lat: -22.3572, lng: -47.3841 };
 const STREETVIEW_IMAGE_INTERVAL_MS = 700;

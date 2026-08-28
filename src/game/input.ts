@@ -7,6 +7,7 @@ export type InputState = {
   mouseX: number; mouseY: number;
   pointerLocked: boolean;
   touchLook: boolean;
+  escapePressed: boolean;
 };
 
 export function createInputState(): InputState {
@@ -17,6 +18,7 @@ export function createInputState(): InputState {
     mouseX: 0, mouseY: 0,
     pointerLocked: false,
     touchLook: false,
+    escapePressed: false,
   };
 }
 
@@ -36,11 +38,22 @@ export function bindInput(state: InputState, canvas: HTMLElement) {
     ShiftLeft: 'sprint', ShiftRight: 'sprint',
     Space: 'jump', KeyE: 'interact',
     KeyF: 'spawnObject', KeyH: 'triggerHorror',
+    Escape: 'escapePressed',
   };
 
+  const pressedKeys = new Set<string>();
   const onKey = (e: KeyboardEvent, down: boolean) => {
+    if (!down && e.code === 'Escape') {
+      state.escapePressed = false;
+      pressedKeys.delete('Escape');
+      return;
+    }
     const key = keyMap[e.code];
     if (key) (state as unknown as Record<string, boolean>)[key as string] = down;
+    if (down && e.code === 'Escape') {
+      state.escapePressed = !pressedKeys.has('Escape');
+      pressedKeys.add('Escape');
+    }
     if (e.code === 'Space' && down) e.preventDefault();
   };
 

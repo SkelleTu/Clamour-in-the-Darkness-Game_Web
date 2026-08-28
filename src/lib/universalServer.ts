@@ -1,4 +1,4 @@
-const DEFAULT_US_URL = 'https://23433157-9897-4bc9-ba96-2c7d12c01e40-00-1apwi2z7aenxz.kirk.replit.dev';
+const DEFAULT_US_URL = 'https://spicy-chairs-learn.loca.lt';
 
 export const UNIVERSAL_SERVER_URL = String(
   import.meta.env.VITE_UNIVERSAL_SERVER_URL ?? DEFAULT_US_URL,
@@ -17,6 +17,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  const apiKey = import.meta.env.VITE_UNIVERSAL_SERVER_API_KEY;
+  if (apiKey && !headers.has('x-api-key')) headers.set('x-api-key', apiKey);
 
   const response = await fetch(`${UNIVERSAL_SERVER_URL}${path}`, { ...init, headers });
   const contentType = response.headers.get('content-type') ?? '';

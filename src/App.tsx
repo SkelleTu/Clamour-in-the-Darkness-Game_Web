@@ -6,7 +6,7 @@ import { HUD } from '@/components/HUD';
 import { TouchControls } from '@/components/TouchControls';
 import { createGame } from '@/game/engine';
 import { loadOrCreatePlayer, geocodeAddress } from '@/game/persistence';
-import { getStreetViewMetadata, clearAuth, validateSession, type AuthSession } from '@/lib/universalServer';
+import { getStreetViewMetadata, clearAuth, validateSession, type AuthSession, UNIVERSAL_SERVER_URL } from '@/lib/universalServer';
 import { isTouchDevice } from '@/game/input';
 import { RULES } from '@/game/rules';
 
@@ -30,18 +30,46 @@ export default function App() {
   const isTouch = useRef(isTouchDevice()).current;
 
   const [auth, setAuth] = useState<AuthSession | null>(null);
-  const [phase, setPhase] = useState<'boot' | 'auth' | 'address' | 'loading' | 'playing' | 'error'>('boot');
+  const [phase, setPhase] = useState<'boot' | 'auth' | 'address' | 'loading' | 'playing' | 'error' | 'paused'>('boot');
   const [address, setAddress] = useState('');
   const [health, setHealth] = useState(RULES.vitals.maxHealth);
   const [stamina, setStamina] = useState(RULES.vitals.maxStamina);
   const [locked, setLocked] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [streetViewAttribution, setStreetViewAttribution] = useState<string | null>(null);
+  const escapePressedRef = useRef(false);
 
   useEffect(() => {
     let alive = true;
-    void validateSession().then((session) => {
+    const apiKey = (import.meta.env?.VITE_UNIVERSAL_SERVER_API_KEY as string | undefined)?.trim();
+
+    async function boot() {
+      try {
+        const healthRes = await fetch(`${UNIVERSAL_SERVER_URL}/api/game/status`, {
+          headers: {
+            Accept: 'application/json',
+            ...(apiKey ? { 'x-api-key': apiKey } : {}),
+          },
+        });
+
+        if (!healthRes.ok) {
+          throw new Error(`Universal Server retornou HTTP ${healthRes.status}`);
+        }
+
+        const health = await healthRes.json().catch(() => null);
+        if (health?.expired) {
+          throw new Error('Universal Server expirado. Tente novamente mais tarde.');
+        }
+      } catch (err) {
+        if (!alive) return;
+        const message = err instanceof Error ? err.message : 'Não foi possível conectar ao Universal Server.';
+        setErrorMsg(message);
+        setPhase('error');
+        return;
+      }
+
       if (!alive) return;
+      const session = await validateSession();
       if (session) {
         setAuth(session);
         setAddress(localStorage.getItem(addressKey(session.playerId)) ?? '');
@@ -49,9 +77,26 @@ export default function App() {
       } else {
         setPhase('auth');
       }
-    });
+    }
+
+    void boot();
     return () => { alive = false; };
   }, []);
+
+  useEffect(() => {
+    if (phase !== 'playing') return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.code === 'Escape' && !escapePressedRef.current) {
+        escapePressedRef.current = true;
+        setPhase((current) => (current === 'playing' ? 'paused' : 'playing'));
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      escapePressedRef.current = false;
+    };
+  }, [phase]);
 
   const logout = useCallback(() => {
     gameRef.current?.destroy();
@@ -62,6 +107,8 @@ export default function App() {
     setStreetViewAttribution(null);
     setPhase('auth');
   }, []);
+
+  const resume = useCallback(() => setPhase('playing'), []);
 
   const startGame = useCallback(async (addr: string, preLat?: number, preLon?: number) => {
     if (!auth) {
@@ -131,7 +178,7 @@ export default function App() {
   const touchControls = gameRef.current?.touchControls;
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-black select-none">
+    <div className={`fixed inset-0 overflow-hidden bg-black select-none ${phase === 'playing' ? '' : 'pointer-events-none'}`}>
       <canvas
         ref={canvasRef}
         className="absolute inset-0 block h-full w-full"
@@ -139,7 +186,7 @@ export default function App() {
       />
 
       {phase === 'boot' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black pointer-events-auto">
           <div className="text-center">
             <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
             <p className="text-[10px] font-mono uppercase tracking-[0.35em] text-white/30">Conectando ao Universal Server</p>
@@ -167,7 +214,7 @@ export default function App() {
       )}
 
       {phase === 'loading' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black pointer-events-auto">
           <div className="w-full max-w-sm px-6 text-center">
             <div className="mx-auto mb-5 h-9 w-9 animate-spin rounded-full border-2 border-white/10 border-t-white/65" />
             <p className="text-[10px] font-mono uppercase tracking-[0.4em] text-white/35">Localizando a noite</p>
@@ -177,7 +224,7 @@ export default function App() {
       )}
 
       {phase === 'error' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black pointer-events-auto">
           <div className="max-w-sm px-6 text-center">
             <p className="mb-5 text-sm font-mono leading-relaxed text-red-300/75">{errorMsg}</p>
             <div className="flex gap-3 justify-center">
@@ -222,6 +269,31 @@ export default function App() {
             />
           )}
         </>
+      )}
+
+      {phase === 'paused' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md pointer-events-auto">
+          <div className="w-full max-w-sm px-6 text-center">
+            <h2 className="mb-6 text-lg font-mono uppercase tracking-[0.35em] text-white/80">Menu</h2>
+            <div className="space-y-3">
+              <button
+                type="button"
+                onPointerDown={(event) => { event.preventDefault(); resume(); }}
+                className="w-full rounded-xl border border-white/15 bg-white/10 py-3 text-xs font-mono uppercase tracking-widest text-white/80 hover:bg-white/15"
+              >
+                Continuar
+              </button>
+              <button
+                type="button"
+                onPointerDown={(event) => { event.preventDefault(); logout(); }}
+                className="w-full rounded-xl border border-red-400/25 bg-red-500/10 py-3 text-xs font-mono uppercase tracking-widest text-red-300/80 hover:bg-red-500/15"
+              >
+                Desconectar da conta
+              </button>
+            </div>
+            <p className="mt-5 text-[10px] font-mono text-white/20">Pressione ESC para alternar</p>
+          </div>
+        </div>
       )}
     </div>
   );
