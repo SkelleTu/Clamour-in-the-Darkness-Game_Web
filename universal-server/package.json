@@ -1,0 +1,26 @@
+{
+"name": "workspace",
+"version": "0.0.0",
+"license": "MIT",
+"scripts": {
+"build": "pnpm --filter @workspace/dashboard run build && pnpm --filter @workspace/api-server run build",
+"build:checked": "pnpm run typecheck && pnpm run build",
+"build:render": "pnpm run build",
+"start": "node -r dotenv/config --enable-source-maps artifacts/api-server/dist/index.mjs",
+"typecheck:libs": "tsc --build",
+"typecheck": "pnpm run typecheck:libs"
+},
+"private": true,
+"engines": {
+"node": ">=24.14.1 <25",
+"pnpm": ">=10.26.1 <11"
+},
+"packageManager": "pnpm@10.26.1",
+"dependencies": {
+"dotenv": "^17.4.2"
+},
+"devDependencies": {
+"prettier": "^3.9.5",
+"typescript": "~5.9.3"
+}
+}

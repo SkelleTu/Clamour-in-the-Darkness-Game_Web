@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+canvas {
+  display: block;
+}
+
+@layer utilities {
+  .bg-gradient-radial {
+    background-image: radial-gradient(var(--tw-gradient-stops));
+  }
+  .bg-white\/8 {
+    background-color: rgba(255,255,255,0.08);
+  }
+  .bg-white\/12 {
+    background-color: rgba(255,255,255,0.12);
+  }
+}

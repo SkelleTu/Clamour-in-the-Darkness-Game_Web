@@ -1,0 +1,10 @@
+run = "npm install && npm run dev"
+entrypoint = "src/main.tsx"
+modules = ["nodejs-24"]
+
+[env]
+NODE_ENV = "development"
+UNIVERSAL_SERVER_INTERNAL_URL = "http://127.0.0.1:8080"
+
+[ports]
+5173 = "application"

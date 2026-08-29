@@ -1,0 +1,59 @@
+name: Sync embedded Universal Server
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'universal-server/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Clamour
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Checkout current Universal Server
+        uses: actions/checkout@v4
+        with:
+          repository: SkelleTu/universal-server
+          ref: main
+          path: universal-server-source
+          fetch-depth: 1
+
+      - name: Mirror Universal Server source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf universal-server
+          mkdir -p universal-server
+          rsync -a --delete \
+            --exclude='.git/' \
+            --exclude='node_modules/' \
+            --exclude='dist/' \
+            --exclude='*/dist/' \
+            --exclude='*.db' \
+            --exclude='*.db-wal' \
+            --exclude='*.db-shm' \
+            universal-server-source/ universal-server/
+
+      - name: Commit embedded copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add universal-server
+          if git diff --cached --quiet; then
+            echo 'Embedded Universal Server is already current.'
+            exit 0
+          fi
+          git commit -m 'chore: sync embedded Universal Server from main'
+          git push

@@ -1,0 +1,133 @@
+import {
+  geocodeAddress as serverGeocodeAddress,
+  loadPlayerState,
+  savePlayerState as serverSavePlayerState,
+  UNIVERSAL_SERVER_URL,
+  type PlayerState,
+} from '@/lib/universalServer';
+
+export async function broadcastHorrorEvent(
+  _playerId: string,
+  _x: number,
+  _y: number,
+  _z: number,
+) {
+  // Event transport will be wired through the multiplayer API. The old
+  // Supabase write is intentionally removed so the game has one backend.
+}
+
+export type SavedPlayerState = {
+  id: string;
+  home_address: string;
+  home_lat: number;
+  home_lon: number;
+  pos_x: number;
+  pos_y: number;
+  pos_z: number;
+  yaw: number;
+  updated_at: string;
+};
+
+export type GeocodeResult = { lat: number; lon: number } | null;
+
+export async function geocodeAddress(address: string): Promise<GeocodeResult> {
+  return serverGeocodeAddress(address);
+}
+
+export type AddressSuggestion = {
+  displayName: string;
+  lat: number;
+  lon: number;
+};
+
+export async function searchAddresses(query: string): Promise<AddressSuggestion[]> {
+  if (query.trim().length < 3) return [];
+  try {
+    const result = await fetch(
+      `${UNIVERSAL_SERVER_URL}/api/game/google/geocode?address=${encodeURIComponent(query)}`,
+      { headers: { Accept: 'application/json' } },
+    );
+    if (!result.ok) return [];
+    const payload = await result.json();
+    const rows = Array.isArray(payload?.results) ? payload.results : [];
+    return rows.slice(0, 5).map((item: {
+      formatted_address?: string;
+      geometry?: { location?: { lat?: number; lng?: number } };
+    }) => ({
+      displayName: item.formatted_address ?? '',
+      lat: Number(item.geometry?.location?.lat ?? NaN),
+      lon: Number(item.geometry?.location?.lng ?? NaN),
+    })).filter((s: AddressSuggestion) => s.displayName && Number.isFinite(s.lat) && Number.isFinite(s.lon));
+  } catch {
+    return [];
+  }
+}
+
+export async function loadOrCreatePlayer(
+  sessionId: string,
+  homeAddress: string,
+  lat: number,
+  lon: number,
+): Promise<SavedPlayerState> {
+  const saved = await loadPlayerState(sessionId);
+  const sameHome = Boolean(saved)
+    && Math.abs(Number(saved!.homeLat) - lat) < 0.0005
+    && Math.abs(Number(saved!.homeLon) - lon) < 0.0005;
+
+  if (saved && sameHome) {
+    return {
+      id: sessionId,
+      home_address: String(saved.homeAddress ?? homeAddress),
+      home_lat: Number(saved.homeLat ?? lat),
+      home_lon: Number(saved.homeLon ?? lon),
+      pos_x: Number(saved.posX ?? 0),
+      pos_y: Number(saved.posY ?? 0.9),
+      pos_z: Number(saved.posZ ?? 0),
+      yaw: Number(saved.yaw ?? 0),
+      updated_at: new Date().toISOString(),
+    };
+  }
+
+  const spawn: SavedPlayerState = {
+    id: sessionId,
+    home_address: homeAddress,
+    home_lat: lat,
+    home_lon: lon,
+    pos_x: 0,
+    pos_y: 0.9,
+    pos_z: 0,
+    yaw: 0,
+    updated_at: new Date().toISOString(),
+  };
+
+  await serverSavePlayerState(sessionId, {
+    playerId: sessionId,
+    homeAddress,
+    homeLat: lat,
+    homeLon: lon,
+    posX: spawn.pos_x,
+    posY: spawn.pos_y,
+    posZ: spawn.pos_z,
+    yaw: spawn.yaw,
+  });
+
+  return spawn;
+}
+
+export async function savePlayerState(
+  id: string,
+  pos: { x: number; y: number; z: number },
+  yaw: number,
+) {
+  const existing = await loadPlayerState(id);
+  await serverSavePlayerState(id, {
+    playerId: id,
+    homeAddress: existing?.homeAddress,
+    homeLat: existing?.homeLat,
+    homeLon: existing?.homeLon,
+    posX: pos.x,
+    posY: pos.y,
+    posZ: pos.z,
+    yaw,
+  });
+}
