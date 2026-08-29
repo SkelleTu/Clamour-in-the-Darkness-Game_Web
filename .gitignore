@@ -21,7 +21,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-.env
 
 # Playwright / browser automation artifacts
 .playwright-mcp/
@@ -32,3 +31,4 @@ run-universal-server.sh
 
 # Embedded backend repo (tracked separately)
 universal-server-main/
+
