@@ -4,6 +4,7 @@ import { AddressStreetView } from '@/components/AddressStreetView';
 import { AuthScreen } from '@/components/AuthScreen';
 import { HUD } from '@/components/HUD';
 import { TouchControls } from '@/components/TouchControls';
+import { StreetViewPanorama, type LatLng } from '@/components/StreetViewPanorama';
 import { createGame } from '@/game/engine';
 import { loadOrCreatePlayer, geocodeAddress } from '@/game/persistence';
 import { getStreetViewMetadata, clearAuth, validateSession, type AuthSession, UNIVERSAL_SERVER_URL } from '@/lib/universalServer';
@@ -30,8 +31,9 @@ export default function App() {
   const isTouch = useRef(isTouchDevice()).current;
 
   const [auth, setAuth] = useState<AuthSession | null>(null);
-  const [phase, setPhase] = useState<'boot' | 'auth' | 'address' | 'loading' | 'playing' | 'error' | 'paused'>('boot');
+  const [phase, setPhase] = useState<'boot' | 'auth' | 'address' | 'streetview' | 'loading' | 'playing' | 'error' | 'paused'>('boot');
   const [address, setAddress] = useState('');
+  const [streetPosition, setStreetPosition] = useState<LatLng | null>(null);
   const [health, setHealth] = useState(RULES.vitals.maxHealth);
   const [stamina, setStamina] = useState(RULES.vitals.maxStamina);
   const [locked, setLocked] = useState(false);
@@ -110,14 +112,12 @@ export default function App() {
 
   const resume = useCallback(() => setPhase('playing'), []);
 
-  const startGame = useCallback(async (addr: string, preLat?: number, preLon?: number) => {
-    if (!auth) {
-      setPhase('auth');
+  const beginGameplay = useCallback(async () => {
+    if (!auth || !streetPosition) {
+      setPhase('address');
       return;
     }
 
-    localStorage.setItem(addressKey(auth.playerId), addr);
-    setAddress(addr);
     setPhase('loading');
     setErrorMsg('');
 
@@ -129,20 +129,11 @@ export default function App() {
       }
       if (!canvasRef.current) throw new Error('Canvas não encontrado');
 
-      let lat = preLat;
-      let lon = preLon;
-      if (lat == null || lon == null) {
-        const geo = await geocodeAddress(addr);
-        if (!geo) throw new Error('Não foi possível localizar esse endereço em Araras.');
-        lat = geo.lat;
-        lon = geo.lon;
-      }
-
-      const streetView = await getStreetViewMetadata(lat, lon);
+      const streetView = await getStreetViewMetadata(streetPosition.lat, streetPosition.lng);
       const streetLat = streetView.location.lat;
       const streetLon = streetView.location.lng;
-      const initialYaw = bearingBetween(streetLat, streetLon, lat, lon);
-      const saved = await loadOrCreatePlayer(auth.playerId, addr, lat, lon);
+      const initialYaw = bearingBetween(streetLat, streetLon, streetPosition.lat, streetPosition.lng);
+      const saved = await loadOrCreatePlayer(auth.playerId, address, streetPosition.lat, streetPosition.lng);
 
       if (gameRef.current) {
         gameRef.current.destroy();
@@ -158,17 +149,44 @@ export default function App() {
         initialYaw,
       });
 
-      if (saved && saved.home_lat === lat && saved.home_lon === lon && (saved.pos_x !== 0 || saved.pos_z !== 0 || saved.yaw !== 0)) {
+      if (saved && saved.home_lat === streetPosition.lat && saved.home_lon === streetPosition.lng && (saved.pos_x !== 0 || saved.pos_z !== 0 || saved.yaw !== 0)) {
         game.loadPosition(saved.pos_x, saved.pos_y, saved.pos_z, saved.yaw);
       }
 
       gameRef.current = game;
       setPhase('playing');
     } catch (err) {
-      console.error('startGame error:', err);
+      console.error('beginGameplay error:', err);
       setErrorMsg(err instanceof Error ? err.message : 'Erro ao inicializar o jogo.');
       setPhase('error');
     }
+  }, [auth, address, streetPosition]);
+
+  const startGame = useCallback(async (addr: string, preLat?: number, preLon?: number) => {
+    if (!auth) {
+      setPhase('auth');
+      return;
+    }
+
+    localStorage.setItem(addressKey(auth.playerId), addr);
+    setAddress(addr);
+    setErrorMsg('');
+
+    let lat = preLat;
+    let lon = preLon;
+    if (lat == null || lon == null) {
+      const geo = await geocodeAddress(addr);
+      if (!geo) {
+        setErrorMsg('Não foi possível localizar esse endereço em Araras.');
+        setPhase('error');
+        return;
+      }
+      lat = geo.lat;
+      lon = geo.lon;
+    }
+
+    setStreetPosition({ lat, lng: lon });
+    setPhase('streetview');
   }, [auth]);
 
   useEffect(() => {
@@ -218,6 +236,33 @@ export default function App() {
             </button>
           </div>
         </>
+      )}
+
+      {phase === 'streetview' && streetPosition && (
+        <div className="fixed inset-0 z-50">
+          <StreetViewPanorama
+            position={streetPosition}
+            address={address}
+            zoom={1}
+            onReady={(panorama) => {
+              if (panorama) {
+                panorama.setOptions({ addressControl: true, clickToGo: true });
+              }
+            }}
+          />
+          <div className="absolute right-5 top-5 z-[60] flex flex-col items-end gap-2 pointer-events-auto">
+            <span className="px-2 text-[10px] font-mono uppercase tracking-widest text-white/45">
+              {auth?.username}
+            </span>
+            <button
+              type="button"
+              onPointerDown={(event) => { event.preventDefault(); void beginGameplay(); }}
+              className="flex items-center gap-1.5 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest text-white/35 backdrop-blur transition-colors hover:border-white/20 hover:text-white/75"
+            >
+              Entrar na Noite
+            </button>
+          </div>
+        </div>
       )}
 
       {phase === 'loading' && (
