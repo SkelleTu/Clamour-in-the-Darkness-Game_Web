@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { LogOut } from 'lucide-react';
-import { AddressPrompt } from '@/components/AddressPrompt';
+import { AddressStreetView } from '@/components/AddressStreetView';
 import { AuthScreen } from '@/components/AuthScreen';
 import { HUD } from '@/components/HUD';
 import { TouchControls } from '@/components/TouchControls';
@@ -202,7 +202,7 @@ export default function App() {
 
       {phase === 'address' && auth && (
         <>
-          <AddressPrompt onConfirm={(addr, lat, lon) => void startGame(addr, lat, lon)} />
+          <AddressStreetView onConfirm={(addr, lat, lon) => void startGame(addr, lat, lon)} />
           <div className="fixed right-5 top-5 z-[60] flex flex-col items-end gap-1.5 pointer-events-auto">
             <span className="px-2 text-[10px] font-mono uppercase tracking-widest text-white/45">
               {auth.username}

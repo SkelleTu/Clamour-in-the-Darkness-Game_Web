@@ -38,9 +38,9 @@ export async function createGame(canvas: HTMLCanvasElement, callbacks: GameCallb
   const scene = new THREE.Scene();
   const world = buildWorld(scene);
 
-  // The Street View environment is the visual world for this address. Keep the
-  // gameplay floor/collision layer, but hide the placeholder building meshes.
-  for (const object of world.objects) object.mesh.visible = false;
+  for (const object of world.objects) {
+    object.mesh.visible = false;
+  }
 
   const streetViewEnvironment = await createStreetViewEnvironment(scene, options.streetView);
   callbacks.onStreetViewAttribution?.(streetViewEnvironment.attribution);

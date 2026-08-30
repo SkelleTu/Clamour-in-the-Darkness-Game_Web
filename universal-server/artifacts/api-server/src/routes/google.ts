@@ -65,6 +65,20 @@ router.get("/game/google/capabilities", authenticate, (_req: AuthedRequest, res)
   });
 });
 
+router.get("/game/google/client-config", (_req: Request, res: Response): void => {
+  console.log("DEBUG client-config hit");
+  const googleKey = key();
+  if (!googleKey) {
+    res.status(503).json({ configured: false, error: "GOOGLE_MAPS_API_KEY não configurada" });
+    return;
+  }
+
+  res.json({
+    configured: true,
+    apiKey: googleKey,
+  });
+});
+
 router.get("/game/google/autocomplete", async (req: Request, res: Response): Promise<void> => {
   const googleKey = key();
   const input = String(req.query.input ?? "").trim();

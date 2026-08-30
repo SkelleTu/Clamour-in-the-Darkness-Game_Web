@@ -142,11 +142,11 @@ router.get("/game/streetview/metadata", async (req: Request, res): Promise<void>
   if (!key) { res.status(503).json({ error: "GOOGLE_MAPS_API_KEY não configurada" }); return; }
   const lat = Number(req.query.lat);
   const lng = Number(req.query.lng);
-  const radius = Math.min(Math.max(numberParam(req.query.radius, 50), 0), 100);
+  const radius = Math.min(Math.max(numberParam(req.query.radius, 50), 0), 1000);
   if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) { res.status(400).json({ error: "lat e lng válidos são obrigatórios" }); return; }
   if (!isWithinAraras(lat, lng)) { res.status(403).json({ error: "Public Street View is available only in Araras, SP" }); return; }
 
-  const params = new URLSearchParams({ location: `${lat},${lng}`, radius: String(radius), source: "outdoor", key });
+  const params = new URLSearchParams({ location: `${lat},${lng}`, radius: String(radius), key });
   const response = await fetch(`https://maps.googleapis.com/maps/api/streetview/metadata?${params.toString()}`);
   const rawPayload = await response.text();
   let payload: Record<string, unknown>;

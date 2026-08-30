@@ -137,7 +137,7 @@ export async function searchAddresses(query: string) {
 
 export async function getStreetViewMetadata(lat: number, lon: number): Promise<StreetViewMetadata> {
   const response = await request<{ data: StreetViewMetadata }>(
-    `/api/game/streetview/metadata?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lon)}&radius=100`,
+    `/api/game/streetview/metadata?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lon)}&radius=1000`,
   );
   return response.data;
 }

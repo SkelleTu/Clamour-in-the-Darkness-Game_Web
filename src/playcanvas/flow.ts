@@ -1,5 +1,5 @@
 import { login, register, validateSession, persistAuth, clearAuth, type AuthSession } from '@/lib/universalServer';
-import { geocodeAddress, searchAddresses, type AddressSuggestion } from '@/game/persistence';
+import { geocodeAddress, searchAddresses, createPlacesSessionToken, type AddressSuggestion } from '@/game/persistence';
 import { ensurePlayCanvasGameAPI, type PlayCanvasSpawnOptions, type PlayCanvasSession } from './gameApi';
 import type { AddressEntry, LoginPayload, RegisterPayload, AuthResult, AddressLookupResult } from './contract';
 
@@ -26,7 +26,7 @@ export async function doRegister(payload: RegisterPayload): Promise<AuthResult> 
 
 export async function doLookupAddress(query: string): Promise<AddressSuggestion[]> {
   if (query.trim().length < 3) return [];
-  return searchAddresses(query);
+  return searchAddresses(query, createPlacesSessionToken());
 }
 
 export async function doConfirmAddress(entry: AddressEntry): Promise<AddressLookupResult> {
