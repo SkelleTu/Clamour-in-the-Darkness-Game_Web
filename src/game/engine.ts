@@ -29,7 +29,7 @@ export async function createGame(canvas: HTMLCanvasElement, callbacks: GameCallb
     localStorage.setItem('clamour_player_id', sessionId);
   }
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(canvas.clientWidth, canvas.clientHeight);
   renderer.shadowMap.enabled = true;
@@ -41,6 +41,8 @@ export async function createGame(canvas: HTMLCanvasElement, callbacks: GameCallb
   for (const object of world.objects) {
     object.mesh.visible = false;
   }
+
+  scene.background = null;
 
   const streetViewEnvironment = await createStreetViewEnvironment(scene, options.streetView);
   callbacks.onStreetViewAttribution?.(streetViewEnvironment.attribution);

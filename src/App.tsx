@@ -247,20 +247,14 @@ export default function App() {
             onReady={(panorama) => {
               if (panorama) {
                 panorama.setOptions({ addressControl: true, clickToGo: true });
+                void beginGameplay();
               }
             }}
           />
-          <div className="absolute right-5 top-5 z-[60] flex flex-col items-end gap-2 pointer-events-auto">
+          <div className="absolute right-5 top-5 z-[60] flex flex-col items-end gap-1.5 pointer-events-auto">
             <span className="px-2 text-[10px] font-mono uppercase tracking-widest text-white/45">
               {auth?.username}
             </span>
-            <button
-              type="button"
-              onPointerDown={(event) => { event.preventDefault(); void beginGameplay(); }}
-              className="flex items-center gap-1.5 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-[9px] font-mono uppercase tracking-widest text-white/35 backdrop-blur transition-colors hover:border-white/20 hover:text-white/75"
-            >
-              Entrar na Noite
-            </button>
           </div>
         </div>
       )}
