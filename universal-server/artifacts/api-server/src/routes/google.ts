@@ -28,6 +28,18 @@ function isArarasAddress(address: string): boolean {
   return /\bararas\b/i.test(address);
 }
 
+// Browser Maps JavaScript API keys are intended to be public client credentials.
+// The deployed key must be restricted by HTTP referrer and API scope in Google Cloud.
+router.get("/game/google/client-config", (_req: Request, res: Response): void => {
+  const googleKey = key();
+  if (!googleKey) {
+    res.status(503).json({ error: "GOOGLE_MAPS_API_KEY não configurada" });
+    return;
+  }
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ apiKey: googleKey });
+});
+
 router.get("/game/google/capabilities", authenticate, (_req: AuthedRequest, res): void => {
   const configured = Boolean(key());
   res.json({
@@ -166,7 +178,7 @@ router.get("/game/google/place-details", async (req: Request, res: Response): Pr
   }
 });
 
-router.get("/game/google/geocode", async (req: Request, res): Promise<void> => {
+router.get("/game/google/geocode", async (req: Request, res: Response): Promise<void> => {
   const googleKey = key();
   const address = String(req.query.address ?? "").trim();
   if (!googleKey) { res.status(503).json({ error: "GOOGLE_MAPS_API_KEY não configurada" }); return; }
