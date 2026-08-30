@@ -35,31 +35,76 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
 }
 
 export type AddressSuggestion = {
+  placeId: string;
   displayName: string;
-  lat: number;
-  lon: number;
+  mainText: string;
+  secondaryText: string;
+  lat?: number;
+  lon?: number;
 };
 
-export async function searchAddresses(query: string): Promise<AddressSuggestion[]> {
+export function createPlacesSessionToken(): string {
+  return crypto.randomUUID();
+}
+
+export async function searchAddresses(
+  query: string,
+  sessionToken: string,
+): Promise<AddressSuggestion[]> {
   if (query.trim().length < 3) return [];
   try {
     const result = await fetch(
-      `${UNIVERSAL_SERVER_URL}/api/game/google/geocode?address=${encodeURIComponent(query)}`,
+      `${UNIVERSAL_SERVER_URL}/api/game/google/autocomplete?input=${encodeURIComponent(query)}&sessionToken=${encodeURIComponent(sessionToken)}`,
       { headers: { Accept: 'application/json' } },
     );
     if (!result.ok) return [];
     const payload = await result.json();
-    const rows = Array.isArray(payload?.results) ? payload.results : [];
-    return rows.slice(0, 5).map((item: {
-      formatted_address?: string;
-      geometry?: { location?: { lat?: number; lng?: number } };
-    }) => ({
-      displayName: item.formatted_address ?? '',
-      lat: Number(item.geometry?.location?.lat ?? NaN),
-      lon: Number(item.geometry?.location?.lng ?? NaN),
-    })).filter((s: AddressSuggestion) => s.displayName && Number.isFinite(s.lat) && Number.isFinite(s.lon));
+    const rows = Array.isArray(payload?.predictions) ? payload.predictions : [];
+    return rows
+      .map((item: {
+        placeId?: string;
+        displayName?: string;
+        mainText?: string;
+        secondaryText?: string;
+      }) => ({
+        placeId: item.placeId ?? '',
+        displayName: item.displayName ?? '',
+        mainText: item.mainText ?? item.displayName ?? '',
+        secondaryText: item.secondaryText ?? '',
+      }))
+      .filter((s: AddressSuggestion) => s.placeId && s.displayName)
+      .slice(0, 5);
   } catch {
     return [];
+  }
+}
+
+export async function getAddressPlaceDetails(
+  placeId: string,
+  sessionToken: string,
+): Promise<AddressSuggestion | null> {
+  if (!placeId) return null;
+  try {
+    const result = await fetch(
+      `${UNIVERSAL_SERVER_URL}/api/game/google/place-details?placeId=${encodeURIComponent(placeId)}&sessionToken=${encodeURIComponent(sessionToken)}`,
+      { headers: { Accept: 'application/json' } },
+    );
+    if (!result.ok) return null;
+    const payload = await result.json();
+    const lat = Number(payload?.lat);
+    const lon = Number(payload?.lon);
+    const displayName = String(payload?.displayName ?? '').trim();
+    if (!displayName || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return {
+      placeId: String(payload?.placeId ?? placeId),
+      displayName,
+      mainText: displayName,
+      secondaryText: '',
+      lat,
+      lon,
+    };
+  } catch {
+    return null;
   }
 }
 
