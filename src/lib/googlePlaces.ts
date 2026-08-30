@@ -23,6 +23,7 @@ type PlaceAutocompleteElementLike = HTMLElement & {
   includedRegionCodes?: string[];
   requestedLanguage?: string;
   requestedRegion?: string;
+  locationBias?: { center: { lat: number; lng: number }; radius: number };
   placeholder?: string;
 };
 
@@ -54,11 +55,15 @@ export async function loadGooglePlaces(): Promise<GoogleMapsApi> {
   mapsApiPromise = new Promise<GoogleMapsApi>((resolve, reject) => {
     const existing = document.querySelector('script[data-clamour-google-maps]') as HTMLScriptElement | null;
     if (existing) {
-      existing.addEventListener('load', () => {
+      const resolveExisting = () => {
         if (window.google?.maps?.importLibrary) resolve(window.google.maps);
         else reject(new Error('Google Maps carregou, mas a API não ficou disponível.'));
-      }, { once: true });
-      existing.addEventListener('error', () => reject(new Error('Falha ao carregar a API do Google Maps.')), { once: true });
+      };
+      if (existing.dataset.loaded === 'true') resolveExisting();
+      else {
+        existing.addEventListener('load', resolveExisting, { once: true });
+        existing.addEventListener('error', () => reject(new Error('Falha ao carregar a API do Google Maps.')), { once: true });
+      }
       return;
     }
 
@@ -67,6 +72,7 @@ export async function loadGooglePlaces(): Promise<GoogleMapsApi> {
     script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async`;
     script.dataset.clamourGoogleMaps = 'true';
     script.onload = () => {
+      script.dataset.loaded = 'true';
       if (window.google?.maps?.importLibrary) resolve(window.google.maps);
       else reject(new Error('Google Maps carregou, mas a API não ficou disponível.'));
     };
@@ -95,6 +101,10 @@ export async function createPlaceAutocompleteElement(): Promise<PlaceAutocomplet
   element.includedRegionCodes = ['br'];
   element.requestedLanguage = 'pt-BR';
   element.requestedRegion = 'br';
+  element.locationBias = {
+    center: { lat: -22.3574, lng: -47.3841 },
+    radius: 15000,
+  };
   element.placeholder = 'Rua XV de Novembro 123, Araras';
   return element;
 }
