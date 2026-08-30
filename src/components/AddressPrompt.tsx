@@ -1,132 +1,132 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { MapPin, Search, Loader2, ChevronRight } from 'lucide-react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { MapPin, Loader2 } from 'lucide-react';
 import {
-  createPlacesSessionToken,
-  getAddressPlaceDetails,
-  searchAddresses,
-  type AddressSuggestion,
-} from '@/game/persistence';
+  createPlaceAutocompleteElement,
+  resolvePlacePrediction,
+  type GooglePlaceSelection,
+} from '@/lib/googlePlaces';
 
 type Props = {
   onConfirm: (address: string, lat?: number, lon?: number) => void;
 };
 
+type PlaceSelectEvent = Event & {
+  placePrediction?: {
+    toPlace: () => {
+      id?: string;
+      formattedAddress?: string;
+      location?: { lat?: () => number; lng?: () => number };
+      fetchFields: (options: { fields: string[] }) => Promise<void>;
+    };
+  };
+};
+
+const GOOGLE_WIDGET_STYLE = `
+  .clamour-google-autocomplete {
+    width: 100%;
+    display: block;
+  }
+  .clamour-google-autocomplete gmp-place-autocomplete {
+    width: 100%;
+  }
+`;
+
 export function AddressPrompt({ onConfirm }: Props) {
-  const [value, setValue] = useState('');
   const [error, setError] = useState('');
-  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [loadingSuggest, setLoadingSuggest] = useState(false);
+  const [loadingGoogle, setLoadingGoogle] = useState(true);
   const [resolvingPlace, setResolvingPlace] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [selectedSuggestion, setSelectedSuggestion] = useState<AddressSuggestion | null>(null);
-  const [sessionToken, setSessionToken] = useState(() => createPlacesSessionToken());
+  const [selectedPlace, setSelectedPlace] = useState<GooglePlaceSelection | null>(null);
+  const autocompleteHostRef = useRef<HTMLDivElement>(null);
+  const autocompleteRef = useRef<HTMLElement | null>(null);
   const submittedRef = useRef(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+    let cancelled = false;
+    let element: HTMLElement | null = null;
 
-    if (value.trim().length < 3 || selectedSuggestion) {
-      setSuggestions([]);
-      setLoadingSuggest(false);
-      return;
+    async function mountGoogleAutocomplete() {
+      try {
+        setLoadingGoogle(true);
+        element = await createPlaceAutocompleteElement();
+        if (cancelled || !autocompleteHostRef.current) return;
+
+        autocompleteHostRef.current.replaceChildren(element);
+        autocompleteRef.current = element;
+
+        const onSelect = async (event: Event) => {
+          const selectEvent = event as PlaceSelectEvent;
+          const prediction = selectEvent.placePrediction;
+          if (!prediction) {
+            setError('O Google não retornou um endereço selecionável.');
+            return;
+          }
+
+          setResolvingPlace(true);
+          setSelectedPlace(null);
+          setError('');
+          submittedRef.current = false;
+
+          try {
+            const place = await resolvePlacePrediction(prediction);
+            if (cancelled) return;
+            setSelectedPlace(place);
+          } catch (resolveError) {
+            if (cancelled) return;
+            setError(
+              resolveError instanceof Error
+                ? resolveError.message
+                : 'Não foi possível confirmar a localização desse endereço no Google.',
+            );
+          } finally {
+            if (!cancelled) setResolvingPlace(false);
+          }
+        };
+
+        element.addEventListener('gmp-select', onSelect);
+        setLoadingGoogle(false);
+
+        return () => element?.removeEventListener('gmp-select', onSelect);
+      } catch (loadError) {
+        if (cancelled) return;
+        setLoadingGoogle(false);
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : 'Não foi possível carregar o Google Places.',
+        );
+      }
     }
 
-    setLoadingSuggest(true);
-    debounceRef.current = setTimeout(async () => {
-      const results = await searchAddresses(value, sessionToken);
-      setSuggestions(results);
-      setLoadingSuggest(false);
-      setShowSuggestions(results.length > 0);
-    }, 300);
+    void mountGoogleAutocomplete();
 
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      cancelled = true;
+      autocompleteRef.current?.replaceWith();
+      autocompleteRef.current = null;
     };
-  }, [value, selectedSuggestion, sessionToken]);
-
-  useEffect(() => {
-    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    if (!isTouch) inputRef.current?.focus();
   }, []);
-
-  useEffect(() => {
-    const handler = (e: PointerEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener('pointerdown', handler);
-    return () => document.removeEventListener('pointerdown', handler);
-  }, []);
-
-  const handleSelectSuggestion = useCallback(async (suggestion: AddressSuggestion) => {
-    setShowSuggestions(false);
-    setResolvingPlace(true);
-    setError('');
-
-    try {
-      const details = await getAddressPlaceDetails(suggestion.placeId, sessionToken);
-      if (!details) {
-        setError('Não foi possível obter a localização exata desse endereço no Google.');
-        return;
-      }
-
-      setSelectedSuggestion({
-        ...suggestion,
-        displayName: details.displayName,
-        lat: details.lat,
-        lon: details.lon,
-      });
-      setValue(details.displayName);
-
-      // A Places Autocomplete session ends after Place Details.
-      setSessionToken(createPlacesSessionToken());
-    } finally {
-      setResolvingPlace(false);
-    }
-  }, [sessionToken]);
 
   const handleSubmit = useCallback(() => {
     if (submittedRef.current || submitting || resolvingPlace) return;
 
-    if (!selectedSuggestion || selectedSuggestion.lat == null || selectedSuggestion.lon == null) {
-      setError('Selecione um dos endereços sugeridos pelo Google para continuar.');
-      setShowSuggestions(suggestions.length > 0);
+    if (!selectedPlace) {
+      setError('Selecione um endereço sugerido pelo Google para continuar.');
       return;
     }
 
     submittedRef.current = true;
     setSubmitting(true);
     setError('');
-    onConfirm(selectedSuggestion.displayName, selectedSuggestion.lat, selectedSuggestion.lon);
-  }, [onConfirm, resolvingPlace, selectedSuggestion, submitting, suggestions.length]);
-
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    handleSubmit();
-  }, [handleSubmit]);
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-
-    if (showSuggestions && suggestions.length > 0) {
-      void handleSelectSuggestion(suggestions[0]);
-    } else {
-      handleSubmit();
-    }
-  }, [handleSelectSuggestion, handleSubmit, showSuggestions, suggestions]);
+    onConfirm(selectedPlace.displayName, selectedPlace.lat, selectedPlace.lon);
+  }, [onConfirm, resolvingPlace, selectedPlace, submitting]);
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-[#060608] pointer-events-auto"
       style={{ touchAction: 'manipulation' }}
     >
+      <style>{GOOGLE_WIDGET_STYLE}</style>
       <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-black/80 pointer-events-none" />
 
       <div
@@ -153,100 +153,55 @@ export function AddressPrompt({ onConfirm }: Props) {
 
         <div className="w-24 h-px bg-white/10" />
 
-        <div className="w-full space-y-4" ref={containerRef}>
+        <div className="w-full space-y-4">
           <div className="space-y-2">
             <label className="text-xs font-mono tracking-widest text-white/40 uppercase block">
               Seu endereço
             </label>
 
-            <div className="relative">
-              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25 pointer-events-none z-10" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={value}
-                onChange={(e) => {
-                  const nextValue = e.target.value;
-                  setValue(nextValue);
-                  setError('');
-                  submittedRef.current = false;
+            <div
+              ref={autocompleteHostRef}
+              className="clamour-google-autocomplete min-h-[56px] relative rounded-lg overflow-visible"
+            />
 
-                  if (selectedSuggestion && nextValue !== selectedSuggestion.displayName) {
-                    setSelectedSuggestion(null);
-                    setSessionToken(createPlacesSessionToken());
-                  }
-                }}
-                onKeyDown={handleKeyDown}
-                onFocus={() => {
-                  if (suggestions.length > 0 && !selectedSuggestion) setShowSuggestions(true);
-                }}
-                placeholder="Rua XV de Novembro 123, Araras"
-                className="w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-10 py-3
-                           text-sm text-white/80 placeholder-white/20 font-mono
-                           focus:outline-none focus:border-white/30 transition-all"
-                autoComplete="off"
-                autoCapitalize="words"
-                spellCheck={false}
-                style={{ fontSize: '16px' }}
-              />
+            {loadingGoogle && (
+              <div className="flex items-center gap-2 px-1 text-[10px] font-mono uppercase tracking-widest text-white/30">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Carregando Google Places...
+              </div>
+            )}
 
-              {(loadingSuggest || resolvingPlace) && (
-                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 animate-spin pointer-events-none" />
-              )}
-              {!loadingSuggest && !resolvingPlace && value && (
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 pointer-events-none" />
-              )}
-            </div>
+            {resolvingPlace && (
+              <div className="flex items-center gap-2 px-1 text-[10px] font-mono uppercase tracking-widest text-white/30">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Confirmando endereço...
+              </div>
+            )}
 
-            {showSuggestions && suggestions.length > 0 && !selectedSuggestion && (
-              <div className="relative">
-                <div className="absolute top-1 left-0 right-0 bg-[#0c0d12] border border-white/15 rounded-lg overflow-hidden shadow-2xl z-50 max-h-60 overflow-y-auto">
-                  {suggestions.map((s) => (
-                    <button
-                      type="button"
-                      key={s.placeId}
-                      disabled={resolvingPlace}
-                      onPointerDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        void handleSelectSuggestion(s);
-                      }}
-                      className="w-full text-left px-3 py-3 flex items-center gap-2 cursor-pointer
-                                 hover:bg-white/8 active:bg-white/12 transition-colors
-                                 border-b border-white/5 last:border-b-0 disabled:cursor-wait disabled:opacity-60"
-                      style={{ touchAction: 'manipulation' }}
-                    >
-                      <MapPin className="w-3.5 h-3.5 text-white/30 flex-shrink-0" />
-                      <span className="min-w-0 flex-1 font-mono">
-                        <span className="block truncate text-xs text-white/70">{s.mainText}</span>
-                        {s.secondaryText && (
-                          <span className="block truncate mt-0.5 text-[10px] text-white/35">{s.secondaryText}</span>
-                        )}
-                      </span>
-                      <ChevronRight className="w-3.5 h-3.5 text-white/20 flex-shrink-0" />
-                    </button>
-                  ))}
-                  <div className="px-3 py-2 border-t border-white/5 text-[9px] font-mono text-white/30 text-right tracking-wide">
-                    Powered by Google
-                  </div>
+            {selectedPlace && !resolvingPlace && (
+              <div className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                <MapPin className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-white/40" />
+                <div className="min-w-0">
+                  <p className="truncate text-[11px] font-mono text-white/65">{selectedPlace.displayName}</p>
+                  <p className="mt-0.5 text-[9px] font-mono uppercase tracking-wider text-white/25">
+                    Localização Google confirmada
+                  </p>
                 </div>
               </div>
             )}
 
-            {error && (
-              <p className="text-xs text-red-400/80 font-mono">{error}</p>
-            )}
+            {error && <p className="text-xs text-red-400/80 font-mono">{error}</p>}
 
             <p className="text-[11px] text-white/20 font-mono leading-relaxed">
-              Selecione o endereço correto sugerido pelo Google.
-              A localização escolhida será usada como ponto inicial e para encontrar o panorama do Street View.
+              Digite o endereço e selecione uma sugestão exibida diretamente pelo Google.
+              A localização confirmada será usada para encontrar o panorama correspondente do Street View.
             </p>
           </div>
 
           <button
             type="button"
-            disabled={submitting || resolvingPlace}
-            onPointerDown={handlePointerDown}
+            disabled={submitting || resolvingPlace || loadingGoogle || !selectedPlace}
+            onClick={handleSubmit}
             className="w-full py-4 rounded-lg bg-white/10 border border-white/20 text-white/80
                        text-sm font-mono tracking-widest uppercase
                        hover:bg-white/15 hover:text-white hover:border-white/30
