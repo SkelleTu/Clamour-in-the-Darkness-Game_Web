@@ -32,3 +32,6 @@ run-universal-server.sh
 # Embedded backend repo (tracked separately)
 universal-server-main/
 
+# Local secrets — never commit real credentials
+universal-server/.env
+
