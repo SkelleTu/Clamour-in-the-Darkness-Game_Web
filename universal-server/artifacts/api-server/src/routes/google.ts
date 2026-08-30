@@ -24,9 +24,23 @@ function key(): string | null {
   return value || null;
 }
 
+function browserKey(): string | null {
+  const value = process.env.GOOGLE_MAPS_BROWSER_API_KEY?.trim() || process.env.GOOGLE_MAPS_API_KEY?.trim();
+  return value || null;
+}
+
 function isArarasAddress(address: string): boolean {
   return /\bararas\b/i.test(address);
 }
+
+router.get("/game/google/client-config", (_req: Request, res: Response): void => {
+  const googleKey = browserKey();
+  if (!googleKey) {
+    res.status(503).json({ configured: false, error: "Google Maps API key não configurada no Universal Server" });
+    return;
+  }
+  res.json({ configured: true, apiKey: googleKey });
+});
 
 router.get("/game/google/capabilities", authenticate, (_req: AuthedRequest, res): void => {
   const configured = Boolean(key());
@@ -166,7 +180,7 @@ router.get("/game/google/place-details", async (req: Request, res: Response): Pr
   }
 });
 
-router.get("/game/google/geocode", async (req: Request, res): Promise<void> => {
+router.get("/game/google/geocode", async (req: Request, res: Response): Promise<void> => {
   const googleKey = key();
   const address = String(req.query.address ?? "").trim();
   if (!googleKey) { res.status(503).json({ error: "GOOGLE_MAPS_API_KEY não configurada" }); return; }
@@ -202,7 +216,7 @@ router.get("/game/google/elevation", authenticate, async (req: AuthedRequest, re
   res.status(response.ok ? 200 : 502).json(payload);
 });
 
-router.get("/game/google/timezone", authenticate, async (req: AuthedRequest, res): Promise<void> => {
+router.get("/game/google/timezone", authenticate, async (req: AuthedRequest, res: Response): Promise<void> => {
   const googleKey = key();
   const lat = Number(req.query.lat);
   const lng = Number(req.query.lng);
